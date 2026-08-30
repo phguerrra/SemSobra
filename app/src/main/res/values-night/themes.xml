@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.SemSobra" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">#B45116</item>
+        <item name="android:navigationBarColor">#111111</item>
+    </style>
+</resources>
