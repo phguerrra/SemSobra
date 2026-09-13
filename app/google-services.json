@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "231279580727",
+    "project_id": "semsobra",
+    "storage_bucket": "semsobra.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:231279580727:android:a932441a108f671cc051b2",
+        "android_client_info": {
+          "package_name": "com.project.semsobra"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJaNBEhe58hzU7byy6RFmutgN5eGvmQBE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

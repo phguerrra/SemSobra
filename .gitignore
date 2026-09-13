@@ -1,0 +1,21 @@
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.gradle/
+local.properties
+
+# Arquivos gerados
+build/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Sistema operacional
+.DS_Store
+
+# Dados confidenciais
+.env
+*.jks
+*.keystore
+keystore.properties
