@@ -2,6 +2,7 @@ package com.semsobra.backend.repository;
 
 import com.semsobra.backend.entity.ProducaoDia;
 import com.semsobra.backend.entity.Turno;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
@@ -15,4 +16,7 @@ public interface ProducaoDiaRepository extends JpaRepository<ProducaoDia, Long> 
     Optional<ProducaoDia> findByDataAndTurno(LocalDate data, Turno turno);
 
     List<ProducaoDia> findAllByOrderByDataDescTurnoAsc();
+
+    @EntityGraph(attributePaths = {"itens", "itens.preparo"})
+    List<ProducaoDia> findAllByFechadoTrueAndDataBetweenOrderByDataAsc(LocalDate dataInicio, LocalDate dataFim);
 }
