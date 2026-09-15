@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -113,6 +114,67 @@ class ProducaoControllerTests {
                 .andExpect(jsonPath("$.title").value("Recurso duplicado"));
     }
 
+    @Test
+    void deveFecharProducao() throws Exception {
+        Preparo preparo = criarPreparo();
+        Long producaoId = criarProducao(preparo.getId(), "2098-01-15", "12.500");
+        Long itemId = producaoDiaRepository.findById(producaoId).orElseThrow().getItens().getFirst().getId();
+        String fechamento = criarFechamento(itemId, "2.500", false, null);
+
+        mockMvc.perform(patch("/api/producoes/{id}/fechamento", producaoId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(fechamento))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true))
+                .andExpect(jsonPath("$.clientesAtendidos").value(120))
+                .andExpect(jsonPath("$.itens[0].quantidadeSobra").value(2.5));
+
+        mockMvc.perform(get("/api/producoes/{id}", producaoId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fechado").value(true));
+    }
+
+    @Test
+    void deveRejeitarSegundoFechamento() throws Exception {
+        Preparo preparo = criarPreparo();
+        Long producaoId = criarProducao(preparo.getId(), "2098-01-16", "10.000");
+        Long itemId = producaoDiaRepository.findById(producaoId).orElseThrow().getItens().getFirst().getId();
+        String fechamento = criarFechamento(itemId, "1.000", false, null);
+
+        mockMvc.perform(patch("/api/producoes/{id}/fechamento", producaoId).contentType(MediaType.APPLICATION_JSON).content(fechamento))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(patch("/api/producoes/{id}/fechamento", producaoId).contentType(MediaType.APPLICATION_JSON).content(fechamento))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Recurso duplicado"));
+    }
+
+    @Test
+    void deveRejeitarSobraMaiorQueQuantidadeProduzida() throws Exception {
+        Preparo preparo = criarPreparo();
+        Long producaoId = criarProducao(preparo.getId(), "2098-01-17", "5.000");
+        Long itemId = producaoDiaRepository.findById(producaoId).orElseThrow().getItens().getFirst().getId();
+
+        mockMvc.perform(patch("/api/producoes/{id}/fechamento", producaoId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(criarFechamento(itemId, "6.000", false, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Operação inválida"));
+    }
+
+    @Test
+    void deveExigirHorarioQuandoPreparoAcabouAntesDoFim() throws Exception {
+        Preparo preparo = criarPreparo();
+        Long producaoId = criarProducao(preparo.getId(), "2098-01-18", "5.000");
+        Long itemId = producaoDiaRepository.findById(producaoId).orElseThrow().getItens().getFirst().getId();
+
+        mockMvc.perform(patch("/api/producoes/{id}/fechamento", producaoId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(criarFechamento(itemId, "0", true, null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Operação inválida"));
+    }
+
     private Preparo criarPreparo() {
         return preparoRepository.save(new Preparo("Preparo API " + UUID.randomUUID(), "Teste", "kg"));
     }
@@ -130,5 +192,33 @@ class ProducaoControllerTests {
                   ]
                 }
                 """.formatted(data, preparoId, quantidade);
+    }
+
+    private Long criarProducao(Long preparoId, String data, String quantidade) throws Exception {
+        mockMvc.perform(post("/api/producoes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(criarCorpo(preparoId, data, quantidade)))
+                .andExpect(status().isCreated());
+
+        return producaoDiaRepository.findByDataAndTurno(LocalDate.parse(data), Turno.ALMOCO).orElseThrow().getId();
+    }
+
+    private String criarFechamento(Long itemId, String quantidadeSobra, boolean acabouAntesDoFim, String horarioAcabou) {
+        String horario = horarioAcabou == null ? "null" : "\"" + horarioAcabou + "\"";
+
+        return """
+                {
+                  "clientesAtendidos": 120,
+                  "restauranteAberto": true,
+                  "itens": [
+                    {
+                      "itemId": %d,
+                      "quantidadeSobra": %s,
+                      "acabouAntesDoFim": %s,
+                      "horarioAcabou": %s
+                    }
+                  ]
+                }
+                """.formatted(itemId, quantidadeSobra, acabouAntesDoFim, horario);
     }
 }

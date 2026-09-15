@@ -35,6 +35,15 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problema);
     }
 
+    @ExceptionHandler(OperacaoInvalidaException.class)
+    public ResponseEntity<ProblemDetail> tratarOperacaoInvalida(OperacaoInvalidaException exception) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+
+        problema.setTitle("Operação inválida");
+
+        return ResponseEntity.badRequest().body(problema);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ProblemDetail> tratarConflitoBanco() {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "A operação viola uma regra de integridade dos dados");

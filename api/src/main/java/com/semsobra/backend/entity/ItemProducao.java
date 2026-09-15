@@ -86,15 +86,9 @@ public class ItemProducao {
         return horarioAcabou;
     }
 
-    public void setQuantidadeSobra(BigDecimal quantidadeSobra) {
+    public void registrarFechamento(BigDecimal quantidadeSobra, boolean acabouAntesDoFim, LocalTime horarioAcabou) {
         this.quantidadeSobra = quantidadeSobra;
-    }
-
-    public void setAcabouAntesDoFim(boolean acabouAntesDoFim) {
         this.acabouAntesDoFim = acabouAntesDoFim;
-    }
-
-    public void setHorarioAcabou(LocalTime horarioAcabou) {
         this.horarioAcabou = horarioAcabou;
     }
 

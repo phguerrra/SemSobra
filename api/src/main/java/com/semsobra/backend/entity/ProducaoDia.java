@@ -90,16 +90,10 @@ public class ProducaoDia {
         return Collections.unmodifiableList(itens);
     }
 
-    public void setClientesAtendidos(int clientesAtendidos) {
+    public void fechar(int clientesAtendidos, boolean restauranteAberto) {
         this.clientesAtendidos = clientesAtendidos;
-    }
-
-    public void setRestauranteAberto(boolean restauranteAberto) {
         this.restauranteAberto = restauranteAberto;
-    }
-
-    public void setFechado(boolean fechado) {
-        this.fechado = fechado;
+        this.fechado = true;
     }
 
     public void adicionarItem(ItemProducao item) {
