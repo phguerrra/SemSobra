@@ -55,7 +55,7 @@ class ProducaoControllerTests {
 
         mockMvc.perform(get("/api/producoes"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray());
+                .andExpect(jsonPath("$.conteudo").isArray());
 
         mockMvc.perform(get("/api/producoes/{id}", id))
                 .andExpect(status().isOk())
@@ -173,6 +173,56 @@ class ProducaoControllerTests {
                         .content(criarFechamento(itemId, "0", true, null)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Operação inválida"));
+    }
+
+    @Test
+    void deveFiltrarHistoricoPorPeriodoTurnoESituacao() throws Exception {
+        Preparo preparo = criarPreparo();
+        criarProducao(preparo.getId(), "2098-03-10", "5.000");
+        Long producaoEsperada = criarProducao(preparo.getId(), "2098-03-11", "6.000");
+
+        mockMvc.perform(get("/api/producoes")
+                        .param("dataInicio", "2098-03-11")
+                        .param("dataFim", "2098-03-11")
+                        .param("turno", "ALMOCO")
+                        .param("fechado", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1))
+                .andExpect(jsonPath("$.conteudo[0].id").value(producaoEsperada))
+                .andExpect(jsonPath("$.conteudo[0].data").value("2098-03-11"));
+    }
+
+    @Test
+    void devePaginarHistoricoDoMaisRecenteParaOMaisAntigo() throws Exception {
+        Preparo preparo = criarPreparo();
+        criarProducao(preparo.getId(), "2098-03-12", "5.000");
+        Long producaoMaisRecente = criarProducao(preparo.getId(), "2098-03-13", "6.000");
+
+        mockMvc.perform(get("/api/producoes").param("pagina", "0").param("tamanho", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pagina").value(0))
+                .andExpect(jsonPath("$.tamanho").value(1))
+                .andExpect(jsonPath("$.totalElementos").value(2))
+                .andExpect(jsonPath("$.totalPaginas").value(2))
+                .andExpect(jsonPath("$.primeira").value(true))
+                .andExpect(jsonPath("$.ultima").value(false))
+                .andExpect(jsonPath("$.conteudo[0].id").value(producaoMaisRecente));
+    }
+
+    @Test
+    void deveRejeitarPeriodoInvertidoNoHistorico() throws Exception {
+        mockMvc.perform(get("/api/producoes")
+                        .param("dataInicio", "2098-03-31")
+                        .param("dataFim", "2098-03-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Operação inválida"));
+    }
+
+    @Test
+    void deveLimitarQuantidadeDeRegistrosPorPagina() throws Exception {
+        mockMvc.perform(get("/api/producoes").param("tamanho", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Erro de validação"));
     }
 
     private Preparo criarPreparo() {

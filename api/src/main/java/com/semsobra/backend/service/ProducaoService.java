@@ -4,19 +4,26 @@ import com.semsobra.backend.dto.FechamentoItemRequest;
 import com.semsobra.backend.dto.FechamentoProducaoRequest;
 import com.semsobra.backend.dto.ItemProducaoRequest;
 import com.semsobra.backend.dto.ItemProducaoResponse;
+import com.semsobra.backend.dto.PaginaResponse;
 import com.semsobra.backend.dto.ProducaoRequest;
 import com.semsobra.backend.dto.ProducaoResponse;
 import com.semsobra.backend.entity.ItemProducao;
 import com.semsobra.backend.entity.Preparo;
 import com.semsobra.backend.entity.ProducaoDia;
+import com.semsobra.backend.entity.Turno;
 import com.semsobra.backend.exception.OperacaoInvalidaException;
 import com.semsobra.backend.exception.RecursoDuplicadoException;
 import com.semsobra.backend.exception.RecursoNaoEncontradoException;
 import com.semsobra.backend.repository.PreparoRepository;
 import com.semsobra.backend.repository.ProducaoDiaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -58,8 +65,54 @@ public class ProducaoService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProducaoResponse> listar() {
-        return producaoRepository.findAllByOrderByDataDescTurnoAsc().stream().map(this::converterParaResponse).toList();
+    public PaginaResponse<ProducaoResponse> listar(
+            LocalDate dataInicio,
+            LocalDate dataFim,
+            Turno turno,
+            Boolean fechado,
+            int pagina,
+            int tamanho
+    ) {
+        if (dataInicio != null && dataFim != null && dataInicio.isAfter(dataFim)) {
+            throw new OperacaoInvalidaException("A data inicial não pode ser posterior à data final");
+        }
+
+        PageRequest paginacao = PageRequest.of(
+                pagina,
+                tamanho,
+                Sort.by(Sort.Direction.DESC, "data").and(Sort.by(Sort.Direction.DESC, "id"))
+        );
+        Specification<ProducaoDia> filtros = criarFiltrosHistorico(dataInicio, dataFim, turno, fechado);
+        Page<ProducaoResponse> resultado = producaoRepository.findAll(filtros, paginacao).map(this::converterParaResponse);
+
+        return PaginaResponse.de(resultado);
+    }
+
+    private Specification<ProducaoDia> criarFiltrosHistorico(
+            LocalDate dataInicio,
+            LocalDate dataFim,
+            Turno turno,
+            Boolean fechado
+    ) {
+        Specification<ProducaoDia> filtros = (root, query, builder) -> builder.conjunction();
+
+        if (dataInicio != null) {
+            filtros = filtros.and((root, query, builder) -> builder.greaterThanOrEqualTo(root.get("data"), dataInicio));
+        }
+
+        if (dataFim != null) {
+            filtros = filtros.and((root, query, builder) -> builder.lessThanOrEqualTo(root.get("data"), dataFim));
+        }
+
+        if (turno != null) {
+            filtros = filtros.and((root, query, builder) -> builder.equal(root.get("turno"), turno));
+        }
+
+        if (fechado != null) {
+            filtros = filtros.and((root, query, builder) -> builder.equal(root.get("fechado"), fechado));
+        }
+
+        return filtros;
     }
 
     @Transactional(readOnly = true)

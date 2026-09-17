@@ -1,9 +1,10 @@
 package com.semsobra.backend.exception;
 
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -65,5 +66,14 @@ public class ApiExceptionHandler {
         problema.setProperty("campos", campos);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(problema);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ProblemDetail> tratarParametrosInvalidos(ConstraintViolationException exception) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Existem parâmetros inválidos na requisição");
+
+        problema.setTitle("Erro de validação");
+
+        return ResponseEntity.badRequest().body(problema);
     }
 }
