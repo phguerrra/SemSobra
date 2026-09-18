@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
+import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
@@ -52,7 +53,6 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    private var nextFoodId = 1L
     private var nextProductionId = 1L
     private var nextProductionItemId = 1L
 
@@ -63,25 +63,28 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private fun carregarPreparos() {
         viewModelScope.launch {
             try {
-                val preparos = withContext(Dispatchers.IO) {
-                    preparoRepository.listarTodos()
-                }
-                val foods = preparos.map { preparo ->
-                    FoodUiModel(
-                        id = preparo.id,
-                        nome = preparo.nome,
-                        descricao = preparo.descricao,
-                        unidadeMedida = preparo.unidadeMedida,
-                        diaDaSemana = preparo.diaDaSemana
-                    )
-                }
-
-                nextFoodId = (foods.maxOfOrNull { it.id } ?: 0L) + 1
-                updateState(foods, _uiState.value.productionSummaries)
+                atualizarPreparosSalvos()
             } catch (_: Exception) {
                 _messages.emit("Não foi possível carregar os preparos salvos")
             }
         }
+    }
+
+    private suspend fun atualizarPreparosSalvos() {
+        val preparos = withContext(Dispatchers.IO) {
+            preparoRepository.listarTodos()
+        }
+        val foods = preparos.map { preparo ->
+            FoodUiModel(
+                id = preparo.id,
+                nome = preparo.nome,
+                descricao = preparo.descricao,
+                unidadeMedida = preparo.unidadeMedida,
+                diaDaSemana = preparo.diaDaSemana
+            )
+        }
+
+        updateState(foods, _uiState.value.productionSummaries)
     }
 
     fun saveFood(id: Long, nome: String, descricao: String, unidade: String, diaDaSemana: Int) {
@@ -91,20 +94,23 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        val current = _uiState.value
         val cleanUnit = unidade.trim().ifBlank { "kg" }
+        val validDay = diaDaSemana.takeIf { it in 1..7 } ?: FoodUiModel.TODOS_OS_DIAS
+
+        if (id == 0L) {
+            salvarNovoPreparo(cleanName, descricao.trim(), cleanUnit, validDay)
+            return
+        }
+
+        val current = _uiState.value
         val food = FoodUiModel(
-            id = if (id > 0) id else nextFoodId++,
+            id = id,
             nome = cleanName,
             descricao = descricao.trim(),
             unidadeMedida = cleanUnit,
-            diaDaSemana = diaDaSemana.takeIf { it in 1..7 } ?: FoodUiModel.TODOS_OS_DIAS
+            diaDaSemana = validDay
         )
-        val foods = if (id > 0) {
-            current.foods.map { item -> if (item.id == id) food else item }
-        } else {
-            current.foods + food
-        }
+        val foods = current.foods.map { item -> if (item.id == id) food else item }
         val summaries = current.productionSummaries.map { summary ->
             summary.copy(
                 items = summary.items.map { display ->
@@ -114,7 +120,28 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
 
         updateState(foods, summaries)
-        _messages.tryEmit(if (id > 0) "Preparo atualizado" else "Preparo cadastrado")
+        _messages.tryEmit("Preparo atualizado")
+    }
+
+    private fun salvarNovoPreparo(
+        nome: String,
+        descricao: String,
+        unidadeMedida: String,
+        diaDaSemana: Int
+    ) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    preparoRepository.inserir(
+                        Preparo(nome, descricao, unidadeMedida, diaDaSemana)
+                    )
+                }
+                atualizarPreparosSalvos()
+                _messages.emit("Preparo cadastrado")
+            } catch (_: Exception) {
+                _messages.emit("Não foi possível cadastrar o preparo")
+            }
+        }
     }
 
     fun deleteFood(food: FoodUiModel) {
