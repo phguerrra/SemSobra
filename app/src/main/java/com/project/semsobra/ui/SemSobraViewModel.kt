@@ -1,7 +1,10 @@
 package com.project.semsobra.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
+import com.project.semsobra.data.repository.PreparoLocalRepository
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
@@ -25,6 +28,9 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SemSobraUiState(
     val previsaoDemanda: ResultadoPrevisao,
@@ -33,14 +39,11 @@ data class SemSobraUiState(
     val analytics: AnalyticsResult = emptyAnalytics()
 )
 
-/**
- * Estado temporário da interface. Os métodos abaixo são os pontos que podem ser
- * ligados ao Firebase sem alterar as telas Compose.
- */
-class SemSobraViewModel(
-    private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada(),
-    private val historicoMapper: HistoricoProducaoMapper = HistoricoProducaoMapper()
-) : ViewModel() {
+class SemSobraViewModel(application: Application) : AndroidViewModel(application) {
+    private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
+    private val historicoMapper = HistoricoProducaoMapper()
+    private val preparoRepository = PreparoLocalRepository(application)
+
     private val _uiState = MutableStateFlow(
         SemSobraUiState(previsaoDemanda = calcularPrevisaoDemanda(emptyList()))
     )
@@ -52,6 +55,34 @@ class SemSobraViewModel(
     private var nextFoodId = 1L
     private var nextProductionId = 1L
     private var nextProductionItemId = 1L
+
+    init {
+        carregarPreparos()
+    }
+
+    private fun carregarPreparos() {
+        viewModelScope.launch {
+            try {
+                val preparos = withContext(Dispatchers.IO) {
+                    preparoRepository.listarTodos()
+                }
+                val foods = preparos.map { preparo ->
+                    FoodUiModel(
+                        id = preparo.id,
+                        nome = preparo.nome,
+                        descricao = preparo.descricao,
+                        unidadeMedida = preparo.unidadeMedida,
+                        diaDaSemana = preparo.diaDaSemana
+                    )
+                }
+
+                nextFoodId = (foods.maxOfOrNull { it.id } ?: 0L) + 1
+                updateState(foods, _uiState.value.productionSummaries)
+            } catch (_: Exception) {
+                _messages.emit("Não foi possível carregar os preparos salvos")
+            }
+        }
+    }
 
     fun saveFood(id: Long, nome: String, descricao: String, unidade: String, diaDaSemana: Int) {
         val cleanName = nome.trim()
