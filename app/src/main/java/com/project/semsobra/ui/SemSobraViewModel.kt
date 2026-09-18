@@ -70,7 +70,9 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private suspend fun atualizarPreparosSalvos() {
+    private suspend fun atualizarPreparosSalvos(
+        productionSummaries: List<ProductionSummary> = _uiState.value.productionSummaries
+    ) {
         val preparos = withContext(Dispatchers.IO) {
             preparoRepository.listarTodos()
         }
@@ -84,7 +86,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             )
         }
         val foodsById = foods.associateBy(FoodUiModel::id)
-        val summaries = _uiState.value.productionSummaries.map { summary ->
+        val summaries = productionSummaries.map { summary ->
             summary.copy(
                 items = summary.items.map { display ->
                     val savedFood = foodsById[display.food.id]
@@ -162,18 +164,32 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun deleteFood(food: FoodUiModel) {
-        val current = _uiState.value
-        val foods = current.foods.filterNot { it.id == food.id }
-        val summaries = current.productionSummaries.mapNotNull { summary ->
-            val items = summary.items.filterNot { it.food.id == food.id }
-            if (items.isEmpty()) {
-                null
-            } else {
-                summary.copy(items = items, totalSobra = items.sumOf { it.item.quantidadeSobra })
+        viewModelScope.launch {
+            try {
+                val excluido = withContext(Dispatchers.IO) {
+                    preparoRepository.excluir(food.id)
+                }
+                if (!excluido) {
+                    throw IllegalStateException("Preparo não encontrado")
+                }
+
+                val summaries = _uiState.value.productionSummaries.mapNotNull { summary ->
+                    val items = summary.items.filterNot { it.food.id == food.id }
+                    if (items.isEmpty()) {
+                        null
+                    } else {
+                        summary.copy(
+                            items = items,
+                            totalSobra = items.sumOf { it.item.quantidadeSobra }
+                        )
+                    }
+                }
+                atualizarPreparosSalvos(summaries)
+                _messages.emit("Preparo excluído")
+            } catch (_: Exception) {
+                _messages.emit("Não foi possível excluir o preparo")
             }
         }
-        updateState(foods, summaries)
-        _messages.tryEmit("Preparo excluído")
     }
 
     fun saveProductionToday(quantitiesByFoodId: Map<Long, Double>) {
