@@ -83,8 +83,17 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 diaDaSemana = preparo.diaDaSemana
             )
         }
+        val foodsById = foods.associateBy(FoodUiModel::id)
+        val summaries = _uiState.value.productionSummaries.map { summary ->
+            summary.copy(
+                items = summary.items.map { display ->
+                    val savedFood = foodsById[display.food.id]
+                    if (savedFood == null) display else display.copy(food = savedFood)
+                }
+            )
+        }
 
-        updateState(foods, _uiState.value.productionSummaries)
+        updateState(foods, summaries)
     }
 
     fun saveFood(id: Long, nome: String, descricao: String, unidade: String, diaDaSemana: Int) {
@@ -102,25 +111,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        val current = _uiState.value
-        val food = FoodUiModel(
-            id = id,
-            nome = cleanName,
-            descricao = descricao.trim(),
-            unidadeMedida = cleanUnit,
-            diaDaSemana = validDay
-        )
-        val foods = current.foods.map { item -> if (item.id == id) food else item }
-        val summaries = current.productionSummaries.map { summary ->
-            summary.copy(
-                items = summary.items.map { display ->
-                    if (display.food.id == food.id) display.copy(food = food) else display
-                }
-            )
-        }
-
-        updateState(foods, summaries)
-        _messages.tryEmit("Preparo atualizado")
+        atualizarPreparo(id, cleanName, descricao.trim(), cleanUnit, validDay)
     }
 
     private fun salvarNovoPreparo(
@@ -140,6 +131,32 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 _messages.emit("Preparo cadastrado")
             } catch (_: Exception) {
                 _messages.emit("Não foi possível cadastrar o preparo")
+            }
+        }
+    }
+
+    private fun atualizarPreparo(
+        id: Long,
+        nome: String,
+        descricao: String,
+        unidadeMedida: String,
+        diaDaSemana: Int
+    ) {
+        viewModelScope.launch {
+            try {
+                val atualizado = withContext(Dispatchers.IO) {
+                    preparoRepository.atualizar(
+                        Preparo(id, nome, descricao, unidadeMedida, diaDaSemana)
+                    )
+                }
+                if (!atualizado) {
+                    throw IllegalStateException("Preparo não encontrado")
+                }
+
+                atualizarPreparosSalvos()
+                _messages.emit("Preparo atualizado")
+            } catch (_: Exception) {
+                _messages.emit("Não foi possível atualizar o preparo")
             }
         }
     }
