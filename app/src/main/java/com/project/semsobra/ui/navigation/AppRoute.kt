@@ -8,7 +8,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.ui.graphics.vector.ImageVector
 
-enum class AppRoute(
+enum class  AppRoute(
     val title: String,
     val shortTitle: String,
     val icon: ImageVector

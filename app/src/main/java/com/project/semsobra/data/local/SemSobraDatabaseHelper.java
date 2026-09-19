@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "semsobra.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     public static final String TABELA_PREPAROS = "preparos";
     public static final String COLUNA_ID = "id";
@@ -15,6 +15,22 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
     public static final String COLUNA_DESCRICAO = "descricao";
     public static final String COLUNA_UNIDADE_MEDIDA = "unidade_medida";
     public static final String COLUNA_DIA_DA_SEMANA = "dia_da_semana";
+
+    public static final String TABELA_PRODUCOES = "producoes";
+    public static final String COLUNA_PRODUCAO_DATA = "data";
+    public static final String COLUNA_PRODUCAO_DIA_DA_SEMANA = "dia_da_semana";
+    public static final String COLUNA_PRODUCAO_CLIENTES_ATENDIDOS = "clientes_atendidos";
+    public static final String COLUNA_PRODUCAO_TURNO = "turno";
+    public static final String COLUNA_PRODUCAO_RESTAURANTE_ABERTO = "restaurante_aberto";
+    public static final String COLUNA_PRODUCAO_FECHADA = "fechada";
+
+    public static final String TABELA_ITENS_PRODUCAO = "itens_producao";
+    public static final String COLUNA_ITEM_PRODUCAO_ID = "producao_id";
+    public static final String COLUNA_ITEM_PREPARO_ID = "preparo_id";
+    public static final String COLUNA_ITEM_QUANTIDADE_PRODUZIDA = "quantidade_produzida";
+    public static final String COLUNA_ITEM_QUANTIDADE_SOBRA = "quantidade_sobra";
+    public static final String COLUNA_ITEM_ACABOU_ANTES_DO_FIM = "acabou_antes_do_fim";
+    public static final String COLUNA_ITEM_HORARIO_ACABOU = "horario_acabou";
 
     private static SemSobraDatabaseHelper instance;
 
@@ -37,6 +53,11 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
 
     @Override
     public void onCreate(SQLiteDatabase database) {
+        criarTabelaPreparos(database);
+        criarTabelasDeProducao(database);
+    }
+
+    private void criarTabelaPreparos(SQLiteDatabase database) {
         database.execSQL(
                 "CREATE TABLE " + TABELA_PREPAROS + " (" +
                         COLUNA_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
@@ -49,8 +70,55 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
         );
     }
 
+    private void criarTabelasDeProducao(SQLiteDatabase database) {
+        database.execSQL(
+                "CREATE TABLE " + TABELA_PRODUCOES + " (" +
+                        COLUNA_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        COLUNA_PRODUCAO_DATA + " TEXT NOT NULL, " +
+                        COLUNA_PRODUCAO_DIA_DA_SEMANA + " INTEGER NOT NULL " +
+                        "CHECK (" + COLUNA_PRODUCAO_DIA_DA_SEMANA + " BETWEEN 1 AND 7), " +
+                        COLUNA_PRODUCAO_CLIENTES_ATENDIDOS + " INTEGER NOT NULL DEFAULT 0 " +
+                        "CHECK (" + COLUNA_PRODUCAO_CLIENTES_ATENDIDOS + " >= 0), " +
+                        COLUNA_PRODUCAO_TURNO + " TEXT NOT NULL, " +
+                        COLUNA_PRODUCAO_RESTAURANTE_ABERTO + " INTEGER NOT NULL DEFAULT 1 " +
+                        "CHECK (" + COLUNA_PRODUCAO_RESTAURANTE_ABERTO + " IN (0, 1)), " +
+                        COLUNA_PRODUCAO_FECHADA + " INTEGER NOT NULL DEFAULT 0 " +
+                        "CHECK (" + COLUNA_PRODUCAO_FECHADA + " IN (0, 1)), " +
+                        "UNIQUE (" + COLUNA_PRODUCAO_DATA + ", " + COLUNA_PRODUCAO_TURNO + ")" +
+                        ")"
+        );
+
+        database.execSQL(
+                "CREATE TABLE " + TABELA_ITENS_PRODUCAO + " (" +
+                        COLUNA_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        COLUNA_ITEM_PRODUCAO_ID + " INTEGER NOT NULL, " +
+                        COLUNA_ITEM_PREPARO_ID + " INTEGER NOT NULL, " +
+                        COLUNA_ITEM_QUANTIDADE_PRODUZIDA + " REAL NOT NULL " +
+                        "CHECK (" + COLUNA_ITEM_QUANTIDADE_PRODUZIDA + " >= 0), " +
+                        COLUNA_ITEM_QUANTIDADE_SOBRA + " REAL NOT NULL DEFAULT 0 " +
+                        "CHECK (" + COLUNA_ITEM_QUANTIDADE_SOBRA + " >= 0 AND " +
+                        COLUNA_ITEM_QUANTIDADE_SOBRA + " <= " + COLUNA_ITEM_QUANTIDADE_PRODUZIDA + "), " +
+                        COLUNA_ITEM_ACABOU_ANTES_DO_FIM + " INTEGER NOT NULL DEFAULT 0 " +
+                        "CHECK (" + COLUNA_ITEM_ACABOU_ANTES_DO_FIM + " IN (0, 1)), " +
+                        COLUNA_ITEM_HORARIO_ACABOU + " TEXT, " +
+                        "FOREIGN KEY (" + COLUNA_ITEM_PRODUCAO_ID + ") REFERENCES " +
+                        TABELA_PRODUCOES + "(" + COLUNA_ID + ") ON DELETE CASCADE, " +
+                        "FOREIGN KEY (" + COLUNA_ITEM_PREPARO_ID + ") REFERENCES " +
+                        TABELA_PREPAROS + "(" + COLUNA_ID + ") ON DELETE RESTRICT, " +
+                        "UNIQUE (" + COLUNA_ITEM_PRODUCAO_ID + ", " + COLUNA_ITEM_PREPARO_ID + ")" +
+                        ")"
+        );
+
+        database.execSQL(
+                "CREATE INDEX indice_itens_producao_preparo ON " + TABELA_ITENS_PRODUCAO +
+                        " (" + COLUNA_ITEM_PREPARO_ID + ")"
+        );
+    }
+
     @Override
     public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
-        // As próximas alterações do banco serão adicionadas aqui como migrações.
+        if (oldVersion < 2) {
+            criarTabelasDeProducao(database);
+        }
     }
 }
