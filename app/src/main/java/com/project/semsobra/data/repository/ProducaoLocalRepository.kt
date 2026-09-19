@@ -54,6 +54,48 @@ class ProducaoLocalRepository(context: Context) {
         }
     }
 
+    fun fecharProducao(
+        producaoId: Long,
+        clientesAtendidos: Int,
+        itens: List<ProductionItemUiModel>
+    ) {
+        require(producaoId > 0) { "A produção precisa ter um ID válido" }
+        require(clientesAtendidos > 0) { "Informe os clientes atendidos" }
+        require(itens.isNotEmpty()) { "A produção precisa ter ao menos um item" }
+        require(itens.all { item ->
+            item.id > 0 &&
+                item.producaoDiaId == producaoId &&
+                item.quantidadeSobra >= 0.0 &&
+                item.quantidadeSobra <= item.quantidadeProduzida
+        }) { "Os itens do fechamento precisam ser válidos" }
+
+        val database = databaseHelper.writableDatabase
+        database.beginTransaction()
+        try {
+            val producoesAtualizadas = database.update(
+                SemSobraDatabaseHelper.TABELA_PRODUCOES,
+                ContentValues().apply {
+                    put(
+                        SemSobraDatabaseHelper.COLUNA_PRODUCAO_CLIENTES_ATENDIDOS,
+                        clientesAtendidos
+                    )
+                    put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_FECHADA, 1)
+                },
+                "${SemSobraDatabaseHelper.COLUNA_ID} = ?",
+                arrayOf(producaoId.toString())
+            )
+            check(producoesAtualizadas == 1) { "Produção não encontrada" }
+
+            itens.forEach { item ->
+                atualizarItemDoFechamento(database, producaoId, item)
+            }
+
+            database.setTransactionSuccessful()
+        } finally {
+            database.endTransaction()
+        }
+    }
+
     fun listarHistorico(): List<ProductionSummary> {
         val database = databaseHelper.readableDatabase
         val sql = """
@@ -218,6 +260,36 @@ class ProducaoLocalRepository(context: Context) {
             put(SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_PRODUZIDA, quantidade)
         }
         database.insertOrThrow(SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO, null, valores)
+    }
+
+    private fun atualizarItemDoFechamento(
+        database: SQLiteDatabase,
+        producaoId: Long,
+        item: ProductionItemUiModel
+    ) {
+        val horarioAcabou = item.horarioAcabou
+            ?.trim()
+            ?.takeIf { item.acabouAntesDoFim && it.isNotEmpty() }
+        val valores = ContentValues().apply {
+            put(SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_SOBRA, item.quantidadeSobra)
+            put(
+                SemSobraDatabaseHelper.COLUNA_ITEM_ACABOU_ANTES_DO_FIM,
+                if (item.acabouAntesDoFim) 1 else 0
+            )
+            if (horarioAcabou == null) {
+                putNull(SemSobraDatabaseHelper.COLUNA_ITEM_HORARIO_ACABOU)
+            } else {
+                put(SemSobraDatabaseHelper.COLUNA_ITEM_HORARIO_ACABOU, horarioAcabou)
+            }
+        }
+        val itensAtualizados = database.update(
+            SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO,
+            valores,
+            "${SemSobraDatabaseHelper.COLUNA_ID} = ? AND " +
+                "${SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID} = ?",
+            arrayOf(item.id.toString(), producaoId.toString())
+        )
+        check(itensAtualizados == 1) { "Item da produção não encontrado" }
     }
 
     private fun criarValoresProducao(producao: ProductionDayUiModel) = ContentValues().apply {

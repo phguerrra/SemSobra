@@ -270,32 +270,42 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
 
         val current = _uiState.value
-        val summaries = current.productionSummaries.map { summary ->
-            if (summary.day.id != productionDayId) {
-                summary
-            } else {
-                val closingById = closingItems.associateBy { it.id }
-                val displays = summary.items.map { display ->
-                    val savedItem = closingById[display.item.id] ?: display.item
-                    val safeLeftover = savedItem.quantidadeSobra
-                        .coerceAtLeast(0.0)
-                        .coerceAtMost(savedItem.quantidadeProduzida)
-                    val item = savedItem.copy(quantidadeSobra = safeLeftover)
-                    display.copy(
-                        item = item,
-                        consumo = (item.quantidadeProduzida - safeLeftover).coerceAtLeast(0.0)
+        val production = current.productionSummaries.firstOrNull {
+            it.day.id == productionDayId && !it.fechado
+        }
+        if (production == null) {
+            _messages.tryEmit("A produção não foi encontrada ou já está fechada")
+            return
+        }
+
+        val closingById = closingItems.associateBy(ProductionItemUiModel::id)
+        val itemsToSave = production.items.map { display ->
+            val closingItem = closingById[display.item.id] ?: display.item
+            closingItem.copy(
+                producaoDiaId = productionDayId,
+                alimentoId = display.item.alimentoId,
+                quantidadeProduzida = display.item.quantidadeProduzida,
+                quantidadeSobra = closingItem.quantidadeSobra
+                    .coerceAtLeast(0.0)
+                    .coerceAtMost(display.item.quantidadeProduzida)
+            )
+        }
+        viewModelScope.launch {
+            try {
+                val savedHistory = withContext(Dispatchers.IO) {
+                    producaoRepository.fecharProducao(
+                        producaoId = productionDayId,
+                        clientesAtendidos = clientesAtendidos,
+                        itens = itemsToSave
                     )
+                    producaoRepository.listarHistorico()
                 }
-                summary.copy(
-                    day = summary.day.copy(clientesAtendidos = clientesAtendidos),
-                    items = displays,
-                    totalSobra = displays.sumOf { it.item.quantidadeSobra },
-                    fechado = true
-                )
+                updateState(_uiState.value.foods, savedHistory)
+                _messages.emit("Fechamento salvo")
+            } catch (_: Exception) {
+                _messages.emit("Não foi possível salvar o fechamento")
             }
         }
-        updateState(current.foods, summaries)
-        _messages.tryEmit("Fechamento salvo")
     }
 
     private fun updateState(foods: List<FoodUiModel>, summaries: List<ProductionSummary>) {
