@@ -1,7 +1,9 @@
 package com.project.semsobra.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -26,6 +28,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -37,20 +41,40 @@ import com.project.semsobra.ui.util.formatQuantity
 
 @Composable
 fun HeaderCard(title: String, value: String, subtitle: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
-        shape = RoundedCornerShape(18.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary
+                    )
+                )
+            )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            Text(title, style = MaterialTheme.typography.labelLarge)
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                title.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f)
+            )
         }
     }
 }
@@ -60,14 +84,22 @@ fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-        shape = RoundedCornerShape(14.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                value,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
@@ -76,13 +108,13 @@ fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
 fun FormCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-        shape = RoundedCornerShape(14.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             content = content
         )
     }
@@ -90,16 +122,25 @@ fun FormCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    Text(
+        text,
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+    )
 }
 
 @Composable
 fun EmptyState(text: String) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(14.dp)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)),
+        shape = RoundedCornerShape(18.dp)
     ) {
-        Text(text, modifier = Modifier.padding(12.dp))
+        Text(
+            text,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(16.dp)
+        )
     }
 }
 
@@ -107,13 +148,13 @@ fun EmptyState(text: String) {
 fun SimpleMetricRow(label: String, value: String) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),
-        shape = RoundedCornerShape(12.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(label)
@@ -127,13 +168,13 @@ fun SimpleMetricRow(label: String, value: String) {
 fun OperationStepCard(productionStatus: String, closingStatus: String) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-        shape = RoundedCornerShape(14.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text("Fluxo do dia", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             OperationStep(Icons.Filled.Restaurant, "Produção", productionStatus)
@@ -147,13 +188,13 @@ fun OperationStepCard(productionStatus: String, closingStatus: String) {
 fun ForecastItemCard(item: ForecastItem, explain: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-        shape = RoundedCornerShape(14.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -200,13 +241,13 @@ fun ForecastItemCard(item: ForecastItem, explain: Boolean = false) {
 fun ProductionSummaryCard(summary: ProductionSummary, showItems: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-        shape = RoundedCornerShape(14.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
                 "${formatDate(summary.day.data)} - ${dayName(summary.day.diaDaSemana)}",

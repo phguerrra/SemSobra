@@ -44,8 +44,8 @@ fun HomeScreen(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             HeaderCard(
@@ -94,9 +94,9 @@ fun HomeScreen(
             items(analytics.forecast.alerts) { alert ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text(alert, modifier = Modifier.padding(12.dp))
+                    Text(alert, modifier = Modifier.padding(16.dp))
                 }
             }
         }

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
+import com.project.semsobra.data.repository.ProducaoLocalRepository
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
@@ -44,6 +45,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
     private val historicoMapper = HistoricoProducaoMapper()
     private val preparoRepository = PreparoLocalRepository(application)
+    private val producaoRepository = ProducaoLocalRepository(application)
 
     private val _uiState = MutableStateFlow(
         SemSobraUiState(previsaoDemanda = calcularPrevisaoDemanda(emptyList()))
@@ -57,15 +59,32 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private var nextProductionItemId = 1L
 
     init {
-        carregarPreparos()
+        carregarDadosIniciais()
     }
 
-    private fun carregarPreparos() {
+    private fun carregarDadosIniciais() {
         viewModelScope.launch {
             try {
-                atualizarPreparosSalvos()
+                val (preparos, historico) = withContext(Dispatchers.IO) {
+                    preparoRepository.listarTodos() to producaoRepository.listarHistorico()
+                }
+                val foods = preparos.map { preparo ->
+                    FoodUiModel(
+                        id = preparo.id,
+                        nome = preparo.nome,
+                        descricao = preparo.descricao,
+                        unidadeMedida = preparo.unidadeMedida,
+                        diaDaSemana = preparo.diaDaSemana
+                    )
+                }
+
+                nextProductionId = (historico.maxOfOrNull { it.day.id } ?: 0L) + 1L
+                nextProductionItemId = (
+                    historico.flatMap { it.items }.maxOfOrNull { it.item.id } ?: 0L
+                ) + 1L
+                updateState(foods, historico)
             } catch (_: Exception) {
-                _messages.emit("Não foi possível carregar os preparos salvos")
+                _messages.emit("Não foi possível carregar os dados salvos")
             }
         }
     }

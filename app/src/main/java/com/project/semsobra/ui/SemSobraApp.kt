@@ -2,14 +2,20 @@ package com.project.semsobra.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
@@ -55,14 +61,34 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("SemSobra", style = MaterialTheme.typography.titleLarge)
-                        Text(currentRoute.title, style = MaterialTheme.typography.labelMedium)
+                    Row {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Eco,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .padding(8.dp)
+                                    .size(22.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("SemSobra", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                currentRoute.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         },
@@ -114,8 +140,8 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
 private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute) -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 10.dp,
-        tonalElevation = 4.dp
+        shadowElevation = 16.dp,
+        tonalElevation = 0.dp
     ) {
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -134,7 +160,14 @@ private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute
                     },
                     label = {
                         Text(route.shortTitle, style = MaterialTheme.typography.labelSmall)
-                    }
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 )
             }
         }
