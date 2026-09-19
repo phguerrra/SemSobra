@@ -1,6 +1,8 @@
 package com.project.semsobra.data.repository
 
+import android.content.ContentValues
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import com.project.semsobra.data.local.SemSobraDatabaseHelper
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.ui.model.FoodUiModel
@@ -11,6 +13,46 @@ import com.project.semsobra.ui.model.ProductionSummary
 
 class ProducaoLocalRepository(context: Context) {
     private val databaseHelper = SemSobraDatabaseHelper.getInstance(context)
+
+    fun salvarProducao(
+        producao: ProductionDayUiModel,
+        quantidadesPorPreparo: Map<Long, Double>
+    ): Long {
+        require(quantidadesPorPreparo.isNotEmpty()) {
+            "A produção precisa ter ao menos um item"
+        }
+        require(quantidadesPorPreparo.all { (preparoId, quantidade) ->
+            preparoId > 0 && quantidade > 0.0
+        }) {
+            "Os preparos e as quantidades da produção precisam ser válidos"
+        }
+
+        val database = databaseHelper.writableDatabase
+        database.beginTransaction()
+        return try {
+            val producaoExistenteId = buscarProducaoId(
+                database = database,
+                data = producao.data,
+                turno = producao.turno
+            )
+            val producaoId = producaoExistenteId ?: inserirProducao(database, producao)
+            if (producaoExistenteId != null) atualizarProducao(database, producaoId, producao)
+
+            database.delete(
+                SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO,
+                "${SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID} = ?",
+                arrayOf(producaoId.toString())
+            )
+            quantidadesPorPreparo.forEach { (preparoId, quantidade) ->
+                inserirItem(database, producaoId, preparoId, quantidade)
+            }
+
+            database.setTransactionSuccessful()
+            producaoId
+        } finally {
+            database.endTransaction()
+        }
+    }
 
     fun listarHistorico(): List<ProductionSummary> {
         val database = databaseHelper.readableDatabase
@@ -119,4 +161,77 @@ class ProducaoLocalRepository(context: Context) {
         val fechado: Boolean,
         val items: MutableList<ProductionItemDisplay> = mutableListOf()
     )
+
+    private fun buscarProducaoId(
+        database: SQLiteDatabase,
+        data: String,
+        turno: Turno
+    ): Long? = database.query(
+        SemSobraDatabaseHelper.TABELA_PRODUCOES,
+        arrayOf(SemSobraDatabaseHelper.COLUNA_ID),
+        "${SemSobraDatabaseHelper.COLUNA_PRODUCAO_DATA} = ? AND " +
+            "${SemSobraDatabaseHelper.COLUNA_PRODUCAO_TURNO} = ?",
+        arrayOf(data, turno.name),
+        null,
+        null,
+        null,
+        "1"
+    ).use { cursor ->
+        if (cursor.moveToFirst()) {
+            cursor.getLong(cursor.getColumnIndexOrThrow(SemSobraDatabaseHelper.COLUNA_ID))
+        } else {
+            null
+        }
+    }
+
+    private fun inserirProducao(
+        database: SQLiteDatabase,
+        producao: ProductionDayUiModel
+    ): Long = database.insertOrThrow(
+        SemSobraDatabaseHelper.TABELA_PRODUCOES,
+        null,
+        criarValoresProducao(producao)
+    )
+
+    private fun atualizarProducao(
+        database: SQLiteDatabase,
+        producaoId: Long,
+        producao: ProductionDayUiModel
+    ) {
+        database.update(
+            SemSobraDatabaseHelper.TABELA_PRODUCOES,
+            criarValoresProducao(producao),
+            "${SemSobraDatabaseHelper.COLUNA_ID} = ?",
+            arrayOf(producaoId.toString())
+        )
+    }
+
+    private fun inserirItem(
+        database: SQLiteDatabase,
+        producaoId: Long,
+        preparoId: Long,
+        quantidade: Double
+    ) {
+        val valores = ContentValues().apply {
+            put(SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID, producaoId)
+            put(SemSobraDatabaseHelper.COLUNA_ITEM_PREPARO_ID, preparoId)
+            put(SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_PRODUZIDA, quantidade)
+        }
+        database.insertOrThrow(SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO, null, valores)
+    }
+
+    private fun criarValoresProducao(producao: ProductionDayUiModel) = ContentValues().apply {
+        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_DATA, producao.data)
+        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_DIA_DA_SEMANA, producao.diaDaSemana)
+        put(
+            SemSobraDatabaseHelper.COLUNA_PRODUCAO_CLIENTES_ATENDIDOS,
+            producao.clientesAtendidos
+        )
+        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_TURNO, producao.turno.name)
+        put(
+            SemSobraDatabaseHelper.COLUNA_PRODUCAO_RESTAURANTE_ABERTO,
+            if (producao.restauranteAberto) 1 else 0
+        )
+        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_FECHADA, 0)
+    }
 }

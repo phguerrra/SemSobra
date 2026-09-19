@@ -57,9 +57,6 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    private var nextProductionId = 1L
-    private var nextProductionItemId = 1L
-
     init {
         carregarDadosIniciais()
     }
@@ -80,10 +77,6 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
 
-                nextProductionId = (historico.maxOfOrNull { it.day.id } ?: 0L) + 1L
-                nextProductionItemId = (
-                    historico.flatMap { it.items }.maxOfOrNull { it.item.id } ?: 0L
-                ) + 1L
                 updateState(foods, historico)
             } catch (_: Exception) {
                 _messages.emit("Não foi possível carregar os dados salvos")
@@ -238,41 +231,32 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
 
         val today = LocalDate.now()
-        val previous = current.productionSummaries.firstOrNull { it.day.data == today.toString() }
-        val productionId = previous?.day?.id ?: nextProductionId++
-        val itemsByFood = previous?.items.orEmpty().associateBy { it.food.id }
-        val items = current.foods
+        val availableFoodIds = current.foods
             .filter { it.disponivelNoDia(today.dayOfWeek.value) }
-            .mapNotNull { food ->
-            val quantity = validQuantities[food.id] ?: return@mapNotNull null
-            val previousItem = itemsByFood[food.id]?.item
-            val item = ProductionItemUiModel(
-                id = previousItem?.id ?: nextProductionItemId++,
-                producaoDiaId = productionId,
-                alimentoId = food.id,
-                quantidadeProduzida = quantity
-            )
-            ProductionItemDisplay(item = item, food = food, consumo = quantity)
-        }
-        if (items.isEmpty()) {
+            .map(FoodUiModel::id)
+            .toSet()
+        val quantitiesToSave = validQuantities.filterKeys(availableFoodIds::contains)
+        if (quantitiesToSave.isEmpty()) {
             _messages.tryEmit("Os preparos informados não estão mais disponíveis")
             return
         }
 
-        val summary = ProductionSummary(
-            day = ProductionDayUiModel(
-                id = productionId,
-                data = today.toString(),
-                diaDaSemana = today.dayOfWeek.value
-            ),
-            items = items,
-            totalSobra = 0.0,
-            fechado = false
+        val production = ProductionDayUiModel(
+            data = today.toString(),
+            diaDaSemana = today.dayOfWeek.value
         )
-        val summaries = (current.productionSummaries.filterNot { it.day.id == productionId } + summary)
-            .sortedByDescending { it.day.data }
-        updateState(current.foods, summaries)
-        _messages.tryEmit("Produção salva")
+        viewModelScope.launch {
+            try {
+                val savedHistory = withContext(Dispatchers.IO) {
+                    producaoRepository.salvarProducao(production, quantitiesToSave)
+                    producaoRepository.listarHistorico()
+                }
+                updateState(_uiState.value.foods, savedHistory)
+                _messages.emit("Produção salva")
+            } catch (_: Exception) {
+                _messages.emit("Não foi possível salvar a produção")
+            }
+        }
     }
 
     fun closeProduction(
