@@ -12,6 +12,7 @@ import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
+import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 import com.project.semsobra.ui.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodMetric
 import com.project.semsobra.ui.model.FoodUiModel
@@ -45,6 +46,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
     private val historicoMapper = HistoricoProducaoMapper()
     private val preparoRepository = PreparoLocalRepository(application)
+    private val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
     private val producaoRepository = ProducaoLocalRepository(application)
 
     private val _uiState = MutableStateFlow(
@@ -143,6 +145,14 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     ) {
         viewModelScope.launch {
             try {
+                val nomeDisponivel = withContext(Dispatchers.IO) {
+                    validarNomePreparo.estaDisponivel(nome, null)
+                }
+                if (!nomeDisponivel) {
+                    _messages.emit("Já existe um preparo com esse nome")
+                    return@launch
+                }
+
                 withContext(Dispatchers.IO) {
                     preparoRepository.inserir(
                         Preparo(nome, descricao, unidadeMedida, diaDaSemana)
@@ -165,6 +175,14 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     ) {
         viewModelScope.launch {
             try {
+                val nomeDisponivel = withContext(Dispatchers.IO) {
+                    validarNomePreparo.estaDisponivel(nome, id)
+                }
+                if (!nomeDisponivel) {
+                    _messages.emit("Já existe um preparo com esse nome")
+                    return@launch
+                }
+
                 val atualizado = withContext(Dispatchers.IO) {
                     preparoRepository.atualizar(
                         Preparo(id, nome, descricao, unidadeMedida, diaDaSemana)
