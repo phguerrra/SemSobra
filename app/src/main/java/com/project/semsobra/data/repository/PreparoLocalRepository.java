@@ -29,8 +29,8 @@ public final class PreparoLocalRepository implements PreparoRepository {
         try (Cursor cursor = database.query(
                 SemSobraDatabaseHelper.TABELA_PREPAROS,
                 null,
-                null,
-                null,
+                SemSobraDatabaseHelper.COLUNA_ATIVO + " = ?",
+                new String[]{"1"},
                 null,
                 null,
                 SemSobraDatabaseHelper.COLUNA_NOME + " COLLATE NOCASE ASC"
@@ -99,6 +99,19 @@ public final class PreparoLocalRepository implements PreparoRepository {
     }
 
     @Override
+    public boolean inativar(long id) {
+        ContentValues valores = new ContentValues();
+        valores.put(SemSobraDatabaseHelper.COLUNA_ATIVO, 0);
+        int linhasAlteradas = databaseHelper.getWritableDatabase().update(
+                SemSobraDatabaseHelper.TABELA_PREPAROS,
+                valores,
+                SemSobraDatabaseHelper.COLUNA_ID + " = ?",
+                new String[]{String.valueOf(id)}
+        );
+        return linhasAlteradas > 0;
+    }
+
+    @Override
     public boolean existeNome(String nome, Long idIgnorado) {
         SQLiteDatabase database = databaseHelper.getReadableDatabase();
         String selecao = SemSobraDatabaseHelper.COLUNA_NOME + " = ?";
@@ -115,6 +128,24 @@ public final class PreparoLocalRepository implements PreparoRepository {
                 new String[]{SemSobraDatabaseHelper.COLUNA_ID},
                 selecao,
                 argumentos.toArray(new String[0]),
+                null,
+                null,
+                null,
+                "1"
+        )) {
+            return cursor.moveToFirst();
+        }
+    }
+
+    @Override
+    public boolean estaEmUsoNoHistorico(long id) {
+        SQLiteDatabase database = databaseHelper.getReadableDatabase();
+
+        try (Cursor cursor = database.query(
+                SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO,
+                new String[]{SemSobraDatabaseHelper.COLUNA_ID},
+                SemSobraDatabaseHelper.COLUNA_ITEM_PREPARO_ID + " = ?",
+                new String[]{String.valueOf(id)},
                 null,
                 null,
                 null,

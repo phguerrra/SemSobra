@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "semsobra.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
     public static final String TABELA_PREPAROS = "preparos";
     public static final String COLUNA_ID = "id";
@@ -15,6 +15,7 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
     public static final String COLUNA_DESCRICAO = "descricao";
     public static final String COLUNA_UNIDADE_MEDIDA = "unidade_medida";
     public static final String COLUNA_DIA_DA_SEMANA = "dia_da_semana";
+    public static final String COLUNA_ATIVO = "ativo";
 
     public static final String TABELA_PRODUCOES = "producoes";
     public static final String COLUNA_PRODUCAO_DATA = "data";
@@ -65,7 +66,9 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
                         COLUNA_DESCRICAO + " TEXT NOT NULL DEFAULT '', " +
                         COLUNA_UNIDADE_MEDIDA + " TEXT NOT NULL, " +
                         COLUNA_DIA_DA_SEMANA + " INTEGER NOT NULL " +
-                        "CHECK (" + COLUNA_DIA_DA_SEMANA + " BETWEEN 0 AND 7)" +
+                        "CHECK (" + COLUNA_DIA_DA_SEMANA + " BETWEEN 0 AND 7), " +
+                        COLUNA_ATIVO + " INTEGER NOT NULL DEFAULT 1 " +
+                        "CHECK (" + COLUNA_ATIVO + " IN (0, 1))" +
                         ")"
         );
     }
@@ -119,6 +122,14 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
     public void onUpgrade(SQLiteDatabase database, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
             criarTabelasDeProducao(database);
+        }
+        if (oldVersion < 3) {
+            database.execSQL(
+                    "ALTER TABLE " + TABELA_PREPAROS +
+                            " ADD COLUMN " + COLUNA_ATIVO +
+                            " INTEGER NOT NULL DEFAULT 1 " +
+                            "CHECK (" + COLUNA_ATIVO + " IN (0, 1))"
+            );
         }
     }
 }

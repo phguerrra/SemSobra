@@ -17,5 +17,9 @@ public interface PreparoRepository {
 
     boolean excluir(long id);
 
+    boolean inativar(long id);
+
     boolean existeNome(String nome, Long idIgnorado);
+
+    boolean estaEmUsoNoHistorico(long id);
 }

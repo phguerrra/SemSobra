@@ -12,6 +12,7 @@ import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
+import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 import com.project.semsobra.ui.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodMetric
@@ -46,6 +47,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
     private val historicoMapper = HistoricoProducaoMapper()
     private val preparoRepository = PreparoLocalRepository(application)
+    private val excluirPreparo = ExcluirPreparoUseCase(preparoRepository)
     private val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
     private val producaoRepository = ProducaoLocalRepository(application)
 
@@ -196,26 +198,23 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     fun deleteFood(food: FoodUiModel) {
         viewModelScope.launch {
             try {
-                val excluido = withContext(Dispatchers.IO) {
-                    preparoRepository.excluir(food.id)
+                val resultado = withContext(Dispatchers.IO) {
+                    excluirPreparo.executar(food.id)
                 }
-                if (!excluido) {
-                    throw IllegalStateException("Preparo não encontrado")
-                }
-
-                val summaries = _uiState.value.productionSummaries.mapNotNull { summary ->
-                    val items = summary.items.filterNot { it.food.id == food.id }
-                    if (items.isEmpty()) {
-                        null
-                    } else {
-                        summary.copy(
-                            items = items,
-                            totalSobra = items.sumOf { it.item.quantidadeSobra }
-                        )
+                when (resultado) {
+                    ExcluirPreparoUseCase.Resultado.NAO_ENCONTRADO -> {
+                        _messages.emit("Preparo não encontrado")
+                        return@launch
+                    }
+                    ExcluirPreparoUseCase.Resultado.EXCLUIDO -> {
+                        atualizarPreparosSalvos()
+                        _messages.emit("Preparo excluído")
+                    }
+                    ExcluirPreparoUseCase.Resultado.INATIVADO_POR_HISTORICO -> {
+                        atualizarPreparosSalvos()
+                        _messages.emit("Este preparo possui histórico e foi inativado")
                     }
                 }
-                atualizarPreparosSalvos(summaries)
-                _messages.emit("Preparo excluído")
             } catch (_: Exception) {
                 _messages.emit("Não foi possível excluir o preparo")
             }

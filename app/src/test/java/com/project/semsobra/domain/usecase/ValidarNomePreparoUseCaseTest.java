@@ -92,5 +92,15 @@ public class ValidarNomePreparoUseCaseTest {
         public boolean excluir(long id) {
             throw new UnsupportedOperationException();
         }
+
+        @Override
+        public boolean inativar(long id) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean estaEmUsoNoHistorico(long id) {
+            throw new UnsupportedOperationException();
+        }
     }
 }
