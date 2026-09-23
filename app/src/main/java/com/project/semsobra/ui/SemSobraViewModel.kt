@@ -13,6 +13,7 @@ import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 import com.project.semsobra.ui.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodMetric
@@ -48,6 +49,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val historicoMapper = HistoricoProducaoMapper()
     private val preparoRepository = PreparoLocalRepository(application)
     private val excluirPreparo = ExcluirPreparoUseCase(preparoRepository)
+    private val validarDadosProducao = ValidarDadosProducaoUseCase()
     private val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
     private val producaoRepository = ProducaoLocalRepository(application)
 
@@ -223,9 +225,14 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
     fun saveProductionToday(quantitiesByFoodId: Map<Long, Double>) {
         val current = _uiState.value
-        val validQuantities = quantitiesByFoodId.filterValues { it > 0.0 }
-        if (validQuantities.isEmpty()) {
+        if (quantitiesByFoodId.isEmpty()) {
             _messages.tryEmit("Informe ao menos uma quantidade maior que zero")
+            return
+        }
+        try {
+            quantitiesByFoodId.values.forEach(validarDadosProducao::validarQuantidadeProduzida)
+        } catch (error: IllegalArgumentException) {
+            _messages.tryEmit(error.message ?: "Quantidade produzida inválida")
             return
         }
 
@@ -234,7 +241,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             .filter { it.disponivelNoDia(today.dayOfWeek.value) }
             .map(FoodUiModel::id)
             .toSet()
-        val quantitiesToSave = validQuantities.filterKeys(availableFoodIds::contains)
+        val quantitiesToSave = quantitiesByFoodId.filterKeys(availableFoodIds::contains)
         if (quantitiesToSave.isEmpty()) {
             _messages.tryEmit("Os preparos informados não estão mais disponíveis")
             return
@@ -263,8 +270,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         clientesAtendidos: Int,
         closingItems: List<ProductionItemUiModel>
     ) {
-        if (clientesAtendidos <= 0) {
-            _messages.tryEmit("Informe a quantidade de clientes atendidos")
+        try {
+            validarDadosProducao.validarClientesAtendidos(clientesAtendidos)
+        } catch (error: IllegalArgumentException) {
+            _messages.tryEmit(error.message ?: "Quantidade de clientes inválida")
             return
         }
 
@@ -278,16 +287,27 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
 
         val closingById = closingItems.associateBy(ProductionItemUiModel::id)
-        val itemsToSave = production.items.map { display ->
-            val closingItem = closingById[display.item.id] ?: display.item
-            closingItem.copy(
-                producaoDiaId = productionDayId,
-                alimentoId = display.item.alimentoId,
-                quantidadeProduzida = display.item.quantidadeProduzida,
-                quantidadeSobra = closingItem.quantidadeSobra
-                    .coerceAtLeast(0.0)
-                    .coerceAtMost(display.item.quantidadeProduzida)
-            )
+        val itemsToSave = try {
+            production.items.map { display ->
+                val closingItem = closingById[display.item.id] ?: display.item
+                validarDadosProducao.validarFechamentoDoItem(
+                    display.item.quantidadeProduzida,
+                    closingItem.quantidadeSobra,
+                    closingItem.acabouAntesDoFim,
+                    closingItem.horarioAcabou
+                )
+                closingItem.copy(
+                    producaoDiaId = productionDayId,
+                    alimentoId = display.item.alimentoId,
+                    quantidadeProduzida = display.item.quantidadeProduzida,
+                    horarioAcabou = closingItem.horarioAcabou
+                        ?.trim()
+                        ?.takeIf { closingItem.acabouAntesDoFim }
+                )
+            }
+        } catch (error: IllegalArgumentException) {
+            _messages.tryEmit(error.message ?: "Dados do fechamento inválidos")
+            return
         }
         viewModelScope.launch {
             try {
