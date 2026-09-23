@@ -37,6 +37,11 @@ public final class ValidarDadosProducaoUseCase {
             boolean acabouAntesDoFim,
             String horarioAcabou
     ) {
+        validarSobra(quantidadeProduzida, quantidadeSobra);
+        validarHorario(acabouAntesDoFim, horarioAcabou);
+    }
+
+    public void validarSobra(double quantidadeProduzida, double quantidadeSobra) {
         validarQuantidadeProduzida(quantidadeProduzida);
         validarNumeroFinito(quantidadeSobra, "A quantidade de sobra");
         if (quantidadeSobra < 0.0) {
@@ -50,11 +55,9 @@ public final class ValidarDadosProducaoUseCase {
                     "A quantidade de sobra não pode ultrapassar " + MAXIMA_QUANTIDADE
             );
         }
-
-        validarHorario(acabouAntesDoFim, horarioAcabou);
     }
 
-    private void validarHorario(boolean acabouAntesDoFim, String horarioAcabou) {
+    public void validarHorario(boolean acabouAntesDoFim, String horarioAcabou) {
         if (!acabouAntesDoFim) {
             return;
         }

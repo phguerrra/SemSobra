@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.ui.components.SectionTitle
@@ -42,7 +44,7 @@ import com.project.semsobra.ui.model.ProductionSummary
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.formatQuantity
-import com.project.semsobra.ui.util.parseDouble
+import com.project.semsobra.ui.util.parseDoubleOrNull
 
 @Composable
 fun ClosingScreen(
@@ -58,6 +60,10 @@ fun ClosingScreen(
     val leftovers = remember { mutableStateMapOf<Long, String>() }
     val ranOut = remember { mutableStateMapOf<Long, Boolean>() }
     val ranOutTime = remember { mutableStateMapOf<Long, String>() }
+    var clientesErro by remember { mutableStateOf<String?>(null) }
+    val leftoverErrors = remember { mutableStateMapOf<Long, String>() }
+    val timeErrors = remember { mutableStateMapOf<Long, String>() }
+    val validator = remember { ValidarDadosProducaoUseCase() }
 
     LaunchedEffect(selected?.day?.id) {
         selected?.let { summary ->
@@ -66,11 +72,14 @@ fun ClosingScreen(
             leftovers.clear()
             ranOut.clear()
             ranOutTime.clear()
+            clientesErro = null
+            leftoverErrors.clear()
+            timeErrors.clear()
             summary.items.forEach { display ->
                 leftovers[display.item.id] = if (display.item.quantidadeSobra > 0) {
                     formatInput(display.item.quantidadeSobra)
                 } else {
-                    ""
+                    "0"
                 }
                 ranOut[display.item.id] = display.item.acabouAntesDoFim
                 ranOutTime[display.item.id] = display.item.horarioAcabou.orEmpty()
@@ -104,10 +113,15 @@ fun ClosingScreen(
             item {
                 OutlinedTextField(
                     value = clientes,
-                    onValueChange = { clientes = it },
+                    onValueChange = {
+                        clientes = it
+                        clientesErro = null
+                    },
                     label = { Text("Clientes atendidos") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
+                    isError = clientesErro != null,
+                    supportingText = clientesErro?.let { message -> { Text(message) } },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -118,9 +132,23 @@ fun ClosingScreen(
                         leftover = leftovers[display.item.id].orEmpty(),
                         ranOut = ranOut[display.item.id] ?: false,
                         time = ranOutTime[display.item.id].orEmpty(),
-                        onLeftoverChange = { leftovers[display.item.id] = it },
-                        onRanOutChange = { ranOut[display.item.id] = it },
-                        onTimeChange = { ranOutTime[display.item.id] = it }
+                        leftoverError = leftoverErrors[display.item.id],
+                        timeError = timeErrors[display.item.id],
+                        onLeftoverChange = {
+                            leftovers[display.item.id] = it
+                            leftoverErrors.remove(display.item.id)
+                        },
+                        onRanOutChange = {
+                            ranOut[display.item.id] = it
+                            if (!it) {
+                                ranOutTime[display.item.id] = ""
+                                timeErrors.remove(display.item.id)
+                            }
+                        },
+                        onTimeChange = {
+                            ranOutTime[display.item.id] = it
+                            timeErrors.remove(display.item.id)
+                        }
                     )
                 }
             }
@@ -128,19 +156,67 @@ fun ClosingScreen(
                 Button(
                     onClick = {
                         selected?.let { summary ->
-                            val items = summary.items.map { display ->
-                                val didRunOut = ranOut[display.item.id] ?: false
-                                display.item.copy(
-                                    quantidadeSobra = parseDouble(leftovers[display.item.id].orEmpty()),
-                                    acabouAntesDoFim = didRunOut,
-                                    horarioAcabou = ranOutTime[display.item.id]
-                                        ?.takeIf { didRunOut && it.isNotBlank() }
-                                )
+                            val clientesAtendidos = clientes.toIntOrNull()
+                            clientesErro = if (clientesAtendidos == null) {
+                                "Informe um número inteiro válido"
+                            } else {
+                                runCatching { validator.validarClientesAtendidos(clientesAtendidos) }
+                                    .exceptionOrNull()
+                                    ?.message
                             }
-                            onClose(summary.day.id, clientes.toIntOrNull() ?: 0, items)
+
+                            val novosErrosDeSobra = mutableMapOf<Long, String>()
+                            val novosErrosDeHorario = mutableMapOf<Long, String>()
+                            val items = summary.items.mapNotNull { display ->
+                                val itemId = display.item.id
+                                val didRunOut = ranOut[display.item.id] ?: false
+                                val leftover = parseDoubleOrNull(leftovers[itemId].orEmpty())
+
+                                if (leftover == null) {
+                                    novosErrosDeSobra[itemId] = "Informe um número válido"
+                                } else {
+                                    runCatching {
+                                        validator.validarSobra(display.item.quantidadeProduzida, leftover)
+                                    }.exceptionOrNull()?.message?.let { message ->
+                                        novosErrosDeSobra[itemId] = message
+                                    }
+                                }
+
+                                runCatching {
+                                    validator.validarHorario(didRunOut, ranOutTime[itemId])
+                                }.exceptionOrNull()?.message?.let { message ->
+                                    novosErrosDeHorario[itemId] = message
+                                }
+
+                                if (leftover == null) {
+                                    null
+                                } else {
+                                    display.item.copy(
+                                        quantidadeSobra = leftover,
+                                        acabouAntesDoFim = didRunOut,
+                                        horarioAcabou = ranOutTime[itemId]
+                                            ?.trim()
+                                            ?.takeIf { didRunOut && it.isNotBlank() }
+                                    )
+                                }
+                            }
+
+                            leftoverErrors.clear()
+                            leftoverErrors.putAll(novosErrosDeSobra)
+                            timeErrors.clear()
+                            timeErrors.putAll(novosErrosDeHorario)
+
+                            if (
+                                clientesErro == null &&
+                                novosErrosDeSobra.isEmpty() &&
+                                novosErrosDeHorario.isEmpty() &&
+                                items.size == summary.items.size
+                            ) {
+                                onClose(summary.day.id, clientesAtendidos!!, items)
+                            }
                         }
                     },
-                    enabled = selected != null && !selected.fechado && (clientes.toIntOrNull() ?: 0) > 0,
+                    enabled = selected != null && !selected.fechado,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Salvar fechamento")
@@ -189,6 +265,8 @@ private fun ClosingItemCard(
     leftover: String,
     ranOut: Boolean,
     time: String,
+    leftoverError: String?,
+    timeError: String?,
     onLeftoverChange: (String) -> Unit,
     onRanOutChange: (Boolean) -> Unit,
     onTimeChange: (String) -> Unit
@@ -219,6 +297,8 @@ private fun ClosingItemCard(
                 label = { Text("Sobra (${display.food.unidadeMedida})") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
+                isError = leftoverError != null,
+                supportingText = leftoverError?.let { message -> { Text(message) } },
                 modifier = Modifier.fillMaxWidth()
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,6 +312,8 @@ private fun ClosingItemCard(
                     label = { Text("Horário em que acabou") },
                     placeholder = { Text("Ex.: 13:40") },
                     singleLine = true,
+                    isError = timeError != null,
+                    supportingText = timeError?.let { message -> { Text(message) } },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

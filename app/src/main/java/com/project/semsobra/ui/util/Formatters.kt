@@ -5,7 +5,11 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-fun parseDouble(value: String): Double = value.replace(",", ".").toDoubleOrNull() ?: 0.0
+fun parseDoubleOrNull(value: String): Double? = value
+    .trim()
+    .replace(",", ".")
+    .toDoubleOrNull()
+    ?.takeIf(Double::isFinite)
 
 fun formatInput(value: Double): String =
     if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()

@@ -34,10 +34,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.dayName
-import com.project.semsobra.ui.util.parseDouble
+import com.project.semsobra.ui.util.parseDoubleOrNull
 import java.time.LocalDate
 
 @Composable
@@ -47,6 +48,8 @@ fun ProductionDayScreen(
     modifier: Modifier = Modifier
 ) {
     val quantities = remember { mutableStateMapOf<Long, String>() }
+    val errors = remember { mutableStateMapOf<Long, String>() }
+    val validator = remember { ValidarDadosProducaoUseCase() }
     val today = LocalDate.now()
 
     LazyColumn(
@@ -68,18 +71,36 @@ fun ProductionDayScreen(
                 ProductionInputCard(
                     food = food,
                     value = quantities[food.id].orEmpty(),
-                    onValueChange = { quantities[food.id] = it }
+                    error = errors[food.id],
+                    onValueChange = {
+                        quantities[food.id] = it
+                        errors.remove(food.id)
+                    }
                 )
             }
             item {
                 Button(
                     onClick = {
-                        onSave(
-                            quantities
-                                .filterValues(String::isNotBlank)
-                                .mapValues { (_, value) -> parseDouble(value) }
-                        )
-                        quantities.clear()
+                        val parsedQuantities = mutableMapOf<Long, Double>()
+                        val currentErrors = mutableMapOf<Long, String>()
+                        quantities.filterValues(String::isNotBlank).forEach { (foodId, value) ->
+                            val quantity = parseDoubleOrNull(value)
+                            if (quantity == null) {
+                                currentErrors[foodId] = "Informe um número válido"
+                            } else {
+                                val error = runCatching {
+                                    validator.validarQuantidadeProduzida(quantity)
+                                }.exceptionOrNull()?.message
+                                if (error == null) {
+                                    parsedQuantities[foodId] = quantity
+                                } else {
+                                    currentErrors[foodId] = error
+                                }
+                            }
+                        }
+                        errors.clear()
+                        errors.putAll(currentErrors)
+                        if (currentErrors.isEmpty()) onSave(parsedQuantities)
                     },
                     enabled = quantities.values.any(String::isNotBlank),
                     modifier = Modifier.fillMaxWidth()
@@ -95,6 +116,7 @@ fun ProductionDayScreen(
 private fun ProductionInputCard(
     food: FoodUiModel,
     value: String,
+    error: String?,
     onValueChange: (String) -> Unit
 ) {
     Card(
@@ -131,6 +153,8 @@ private fun ProductionInputCard(
                 placeholder = { Text("Ex.: 8,5") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
+                isError = error != null,
+                supportingText = error?.let { message -> { Text(message) } },
                 modifier = Modifier.fillMaxWidth()
             )
         }
