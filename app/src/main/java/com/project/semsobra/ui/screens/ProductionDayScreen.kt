@@ -20,11 +20,13 @@ import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
+import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.dayName
@@ -44,13 +47,23 @@ import java.time.LocalDate
 @Composable
 fun ProductionDayScreen(
     foods: List<FoodUiModel>,
+    saveStatus: SaveStatus,
     onSave: (Map<Long, Double>) -> Unit,
+    onSaveResultConsumed: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val quantities = remember { mutableStateMapOf<Long, String>() }
     val errors = remember { mutableStateMapOf<Long, String>() }
     val validator = remember { ValidarDadosProducaoUseCase() }
     val today = LocalDate.now()
+
+    LaunchedEffect(saveStatus) {
+        if (saveStatus == SaveStatus.SUCCESS) {
+            quantities.clear()
+            errors.clear()
+            onSaveResultConsumed()
+        }
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -102,10 +115,21 @@ fun ProductionDayScreen(
                         errors.putAll(currentErrors)
                         if (currentErrors.isEmpty()) onSave(parsedQuantities)
                     },
-                    enabled = quantities.values.any(String::isNotBlank),
+                    enabled = quantities.values.any(String::isNotBlank) &&
+                        saveStatus != SaveStatus.SAVING,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Salvar produção")
+                    if (saveStatus == SaveStatus.SAVING) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Salvando...")
+                    } else {
+                        Text("Salvar produção")
+                    }
                 }
             }
         }

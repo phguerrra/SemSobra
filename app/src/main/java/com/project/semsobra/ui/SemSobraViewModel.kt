@@ -41,8 +41,17 @@ data class SemSobraUiState(
     val previsaoDemanda: ResultadoPrevisao,
     val foods: List<FoodUiModel> = emptyList(),
     val productionSummaries: List<ProductionSummary> = emptyList(),
-    val analytics: AnalyticsResult = emptyAnalytics()
+    val analytics: AnalyticsResult = emptyAnalytics(),
+    val foodSaveStatus: SaveStatus = SaveStatus.IDLE,
+    val productionSaveStatus: SaveStatus = SaveStatus.IDLE
 )
+
+enum class SaveStatus {
+    IDLE,
+    SAVING,
+    SUCCESS,
+    ERROR
+}
 
 class SemSobraViewModel(application: Application) : AndroidViewModel(application) {
     private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
@@ -117,6 +126,8 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun saveFood(id: Long, nome: String, descricao: String, unidade: String, diaDaSemana: Int) {
+        if (_uiState.value.foodSaveStatus == SaveStatus.SAVING) return
+
         val cleanName = nome.trim()
         if (cleanName.isBlank()) {
             _messages.tryEmit("Informe o nome do preparo")
@@ -125,6 +136,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
         val cleanUnit = unidade.trim().ifBlank { "kg" }
         val validDay = diaDaSemana.takeIf { it in 1..7 } ?: FoodUiModel.TODOS_OS_DIAS
+        setFoodSaveStatus(SaveStatus.SAVING)
 
         if (id == 0L) {
             salvarNovoPreparo(cleanName, descricao.trim(), cleanUnit, validDay)
@@ -146,6 +158,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     validarNomePreparo.estaDisponivel(nome, null)
                 }
                 if (!nomeDisponivel) {
+                    setFoodSaveStatus(SaveStatus.ERROR)
                     _messages.emit("Já existe um preparo com esse nome")
                     return@launch
                 }
@@ -156,8 +169,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 atualizarPreparosSalvos()
+                setFoodSaveStatus(SaveStatus.SUCCESS)
                 _messages.emit("Preparo cadastrado")
             } catch (_: Exception) {
+                setFoodSaveStatus(SaveStatus.ERROR)
                 _messages.emit("Não foi possível cadastrar o preparo")
             }
         }
@@ -176,6 +191,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     validarNomePreparo.estaDisponivel(nome, id)
                 }
                 if (!nomeDisponivel) {
+                    setFoodSaveStatus(SaveStatus.ERROR)
                     _messages.emit("Já existe um preparo com esse nome")
                     return@launch
                 }
@@ -190,8 +206,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 atualizarPreparosSalvos()
+                setFoodSaveStatus(SaveStatus.SUCCESS)
                 _messages.emit("Preparo atualizado")
             } catch (_: Exception) {
+                setFoodSaveStatus(SaveStatus.ERROR)
                 _messages.emit("Não foi possível atualizar o preparo")
             }
         }
@@ -224,6 +242,8 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun saveProductionToday(quantitiesByFoodId: Map<Long, Double>) {
+        if (_uiState.value.productionSaveStatus == SaveStatus.SAVING) return
+
         val current = _uiState.value
         if (quantitiesByFoodId.isEmpty()) {
             _messages.tryEmit("Informe ao menos uma quantidade maior que zero")
@@ -251,6 +271,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             data = today.toString(),
             diaDaSemana = today.dayOfWeek.value
         )
+        setProductionSaveStatus(SaveStatus.SAVING)
         viewModelScope.launch {
             try {
                 val savedHistory = withContext(Dispatchers.IO) {
@@ -258,8 +279,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     producaoRepository.listarHistorico()
                 }
                 updateState(_uiState.value.foods, savedHistory)
+                setProductionSaveStatus(SaveStatus.SUCCESS)
                 _messages.emit("Produção salva")
             } catch (_: Exception) {
+                setProductionSaveStatus(SaveStatus.ERROR)
                 _messages.emit("Não foi possível salvar a produção")
             }
         }
@@ -332,7 +355,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         val foodsNaDataPrevista = foods.filter {
             it.disponivelNoDia(previsaoDemanda.dataPrevisao.dayOfWeek.value)
         }
-        _uiState.value = SemSobraUiState(
+        _uiState.value = _uiState.value.copy(
             previsaoDemanda = previsaoDemanda,
             foods = foods,
             productionSummaries = summaries,
@@ -342,6 +365,26 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 forecastCustomers = previsaoDemanda.clientesPrevistos
             )
         )
+    }
+
+    fun consumeFoodSaveResult() {
+        if (_uiState.value.foodSaveStatus != SaveStatus.SAVING) {
+            setFoodSaveStatus(SaveStatus.IDLE)
+        }
+    }
+
+    fun consumeProductionSaveResult() {
+        if (_uiState.value.productionSaveStatus != SaveStatus.SAVING) {
+            setProductionSaveStatus(SaveStatus.IDLE)
+        }
+    }
+
+    private fun setFoodSaveStatus(status: SaveStatus) {
+        _uiState.value = _uiState.value.copy(foodSaveStatus = status)
+    }
+
+    private fun setProductionSaveStatus(status: SaveStatus) {
+        _uiState.value = _uiState.value.copy(productionSaveStatus = status)
     }
 
     private fun calcularPrevisaoDemanda(
