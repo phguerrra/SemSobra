@@ -1,9 +1,10 @@
 package com.project.semsobra.data.repository
 
-import android.content.ContentValues
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
-import com.project.semsobra.data.local.SemSobraDatabaseHelper
+import com.project.semsobra.data.local.room.HistoricoRow
+import com.project.semsobra.data.local.room.ItemProducaoEntity
+import com.project.semsobra.data.local.room.ProducaoEntity
+import com.project.semsobra.data.local.room.SemSobraDatabase
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.ui.model.FoodUiModel
@@ -11,9 +12,15 @@ import com.project.semsobra.ui.model.ProductionDayUiModel
 import com.project.semsobra.ui.model.ProductionItemDisplay
 import com.project.semsobra.ui.model.ProductionItemUiModel
 import com.project.semsobra.ui.model.ProductionSummary
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class ProducaoLocalRepository(context: Context) {
-    private val databaseHelper = SemSobraDatabaseHelper.getInstance(context)
+    private val database = SemSobraDatabase.getInstance(context)
+    private val dao = database.producaoDao()
+
+    fun observarHistorico(): Flow<List<ProductionSummary>> =
+        dao.observarHistorico().map(::mapearHistorico)
 
     fun salvarProducao(
         producao: ProductionDayUiModel,
@@ -24,35 +31,28 @@ class ProducaoLocalRepository(context: Context) {
         }
         require(quantidadesPorPreparo.all { (preparoId, quantidade) ->
             preparoId > 0 && quantidade > 0.0
-        }) {
-            "Os preparos e as quantidades da produção precisam ser válidos"
-        }
+        }) { "Os preparos e as quantidades da produção precisam ser válidos" }
 
-        val database = databaseHelper.writableDatabase
-        database.beginTransaction()
-        return try {
-            val producaoExistenteId = buscarProducaoId(
-                database = database,
-                data = producao.data,
-                turno = producao.turno
-            )
-            val producaoId = producaoExistenteId ?: inserirProducao(database, producao)
-            if (producaoExistenteId != null) atualizarProducao(database, producaoId, producao)
+        var resultado = 0L
+        database.runInTransaction {
+            val existenteId = dao.buscarId(producao.data, producao.turno.name)
+            val entity = producao.toEntity(id = existenteId ?: 0L)
+            val producaoId = existenteId ?: dao.inserirProducao(entity)
+            if (existenteId != null) dao.atualizarProducao(entity)
 
-            database.delete(
-                SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO,
-                "${SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID} = ?",
-                arrayOf(producaoId.toString())
-            )
+            dao.excluirItens(producaoId)
             quantidadesPorPreparo.forEach { (preparoId, quantidade) ->
-                inserirItem(database, producaoId, preparoId, quantidade)
+                dao.inserirItem(
+                    ItemProducaoEntity(
+                        producaoId = producaoId,
+                        preparoId = preparoId,
+                        quantidadeProduzida = QuantityPolicy.normalize(quantidade)
+                    )
+                )
             }
-
-            database.setTransactionSuccessful()
-            producaoId
-        } finally {
-            database.endTransaction()
+            resultado = producaoId
         }
+        return resultado
     }
 
     fun fecharProducao(
@@ -63,254 +63,83 @@ class ProducaoLocalRepository(context: Context) {
         require(producaoId > 0) { "A produção precisa ter um ID válido" }
         require(clientesAtendidos > 0) { "Informe os clientes atendidos" }
         require(itens.isNotEmpty()) { "A produção precisa ter ao menos um item" }
-        require(itens.all { item ->
-            item.id > 0 &&
-                item.producaoDiaId == producaoId &&
-                item.quantidadeSobra >= 0.0 &&
-                item.quantidadeSobra <= item.quantidadeProduzida
-        }) { "Os itens do fechamento precisam ser válidos" }
 
-        val database = databaseHelper.writableDatabase
-        database.beginTransaction()
-        try {
-            val producoesAtualizadas = database.update(
-                SemSobraDatabaseHelper.TABELA_PRODUCOES,
-                ContentValues().apply {
-                    put(
-                        SemSobraDatabaseHelper.COLUNA_PRODUCAO_CLIENTES_ATENDIDOS,
-                        clientesAtendidos
-                    )
-                    put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_FECHADA, 1)
-                },
-                "${SemSobraDatabaseHelper.COLUNA_ID} = ?",
-                arrayOf(producaoId.toString())
-            )
-            check(producoesAtualizadas == 1) { "Produção não encontrada" }
-
+        database.runInTransaction {
+            check(dao.fecharProducao(producaoId, clientesAtendidos) == 1) {
+                "Produção não encontrada"
+            }
             itens.forEach { item ->
-                atualizarItemDoFechamento(database, producaoId, item)
+                val horario = item.horarioAcabou
+                    ?.trim()
+                    ?.takeIf { item.acabouAntesDoFim && it.isNotEmpty() }
+                check(
+                    dao.atualizarFechamentoItem(
+                        itemId = item.id,
+                        producaoId = producaoId,
+                        sobra = QuantityPolicy.normalize(item.quantidadeSobra),
+                        acabou = item.acabouAntesDoFim,
+                        horario = horario
+                    ) == 1
+                ) { "Item da produção não encontrado" }
             }
-
-            database.setTransactionSuccessful()
-        } finally {
-            database.endTransaction()
         }
     }
 
-    fun listarHistorico(): List<ProductionSummary> {
-        val database = databaseHelper.readableDatabase
-        val sql = """
-            SELECT
-                p.id AS producao_id,
-                p.data,
-                p.dia_da_semana AS producao_dia_da_semana,
-                p.clientes_atendidos,
-                p.turno,
-                p.restaurante_aberto,
-                p.fechada,
-                ip.id AS item_id,
-                ip.preparo_id,
-                ip.quantidade_produzida,
-                ip.quantidade_sobra,
-                ip.acabou_antes_do_fim,
-                ip.horario_acabou,
-                pr.nome,
-                pr.descricao,
-                pr.unidade_medida,
-                pr.dia_da_semana AS preparo_dia_da_semana
-            FROM producoes p
-            INNER JOIN itens_producao ip ON ip.producao_id = p.id
-            INNER JOIN preparos pr ON pr.id = ip.preparo_id
-            ORDER BY p.data DESC, p.id DESC, ip.id ASC
-        """.trimIndent()
+    fun listarHistorico(): List<ProductionSummary> = mapearHistorico(dao.listarHistorico())
 
-        val historico = linkedMapOf<Long, ResumoEmConstrucao>()
-        database.rawQuery(sql, null).use { cursor ->
-            while (cursor.moveToNext()) {
-                val producaoId = cursor.getLong(cursor.getColumnIndexOrThrow("producao_id"))
-                val resumo = historico.getOrPut(producaoId) {
-                    ResumoEmConstrucao(
-                        day = ProductionDayUiModel(
-                            id = producaoId,
-                            data = cursor.getString(cursor.getColumnIndexOrThrow("data")),
-                            diaDaSemana = cursor.getInt(
-                                cursor.getColumnIndexOrThrow("producao_dia_da_semana")
-                            ),
-                            clientesAtendidos = cursor.getInt(
-                                cursor.getColumnIndexOrThrow("clientes_atendidos")
-                            ),
-                            turno = Turno.valueOf(
-                                cursor.getString(cursor.getColumnIndexOrThrow("turno"))
-                            ),
-                            restauranteAberto = cursor.getInt(
-                                cursor.getColumnIndexOrThrow("restaurante_aberto")
-                            ) == 1
-                        ),
-                        fechado = cursor.getInt(cursor.getColumnIndexOrThrow("fechada")) == 1
-                    )
-                }
-
-                val quantidadeProduzida = QuantityPolicy.normalize(
-                    cursor.getDouble(cursor.getColumnIndexOrThrow("quantidade_produzida"))
-                )
-                val quantidadeSobra = QuantityPolicy.normalize(
-                    cursor.getDouble(cursor.getColumnIndexOrThrow("quantidade_sobra"))
-                )
-                val preparoId = cursor.getLong(cursor.getColumnIndexOrThrow("preparo_id"))
-                val item = ProductionItemUiModel(
-                    id = cursor.getLong(cursor.getColumnIndexOrThrow("item_id")),
-                    producaoDiaId = producaoId,
-                    alimentoId = preparoId,
-                    quantidadeProduzida = quantidadeProduzida,
-                    quantidadeSobra = quantidadeSobra,
-                    acabouAntesDoFim = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("acabou_antes_do_fim")
-                    ) == 1,
-                    horarioAcabou = cursor.getString(
-                        cursor.getColumnIndexOrThrow("horario_acabou")
-                    )
-                )
-                val preparo = FoodUiModel(
-                    id = preparoId,
-                    nome = cursor.getString(cursor.getColumnIndexOrThrow("nome")),
-                    descricao = cursor.getString(cursor.getColumnIndexOrThrow("descricao")),
-                    unidadeMedida = cursor.getString(
-                        cursor.getColumnIndexOrThrow("unidade_medida")
-                    ),
-                    diaDaSemana = cursor.getInt(
-                        cursor.getColumnIndexOrThrow("preparo_dia_da_semana")
-                    )
-                )
-                resumo.items += ProductionItemDisplay(
-                    item = item,
-                    food = preparo,
-                    consumo = QuantityPolicy.subtract(quantidadeProduzida, quantidadeSobra)
-                        .coerceAtLeast(0.0)
-                )
-            }
-        }
-
-        return historico.values.map { resumo ->
+    private fun mapearHistorico(rows: List<HistoricoRow>): List<ProductionSummary> = rows
+        .groupBy(HistoricoRow::producaoId)
+        .values
+        .map { productionRows ->
+            val first = productionRows.first()
             ProductionSummary(
-                day = resumo.day,
-                items = resumo.items,
-                fechado = resumo.fechado
+                day = ProductionDayUiModel(
+                    id = first.producaoId,
+                    data = first.data,
+                    diaDaSemana = first.producaoDiaDaSemana,
+                    clientesAtendidos = first.clientesAtendidos,
+                    turno = Turno.valueOf(first.turno),
+                    restauranteAberto = first.restauranteAberto
+                ),
+                items = productionRows.map(::mapearItem),
+                fechado = first.fechada
             )
         }
+        .sortedWith(compareByDescending<ProductionSummary> { it.day.data }.thenByDescending { it.day.id })
+
+    private fun mapearItem(row: HistoricoRow): ProductionItemDisplay {
+        val produced = QuantityPolicy.normalize(row.quantidadeProduzida)
+        val leftover = QuantityPolicy.normalize(row.quantidadeSobra)
+        val item = ProductionItemUiModel(
+            id = row.itemId,
+            producaoDiaId = row.producaoId,
+            alimentoId = row.preparoId,
+            quantidadeProduzida = produced,
+            quantidadeSobra = leftover,
+            acabouAntesDoFim = row.acabouAntesDoFim,
+            horarioAcabou = row.horarioAcabou
+        )
+        val food = FoodUiModel(
+            id = row.preparoId,
+            nome = row.nome,
+            descricao = row.descricao,
+            unidadeMedida = row.unidadeMedida,
+            diaDaSemana = row.preparoDiaDaSemana
+        )
+        return ProductionItemDisplay(
+            item = item,
+            food = food,
+            consumo = QuantityPolicy.subtract(produced, leftover).coerceAtLeast(0.0)
+        )
     }
 
-    private data class ResumoEmConstrucao(
-        val day: ProductionDayUiModel,
-        val fechado: Boolean,
-        val items: MutableList<ProductionItemDisplay> = mutableListOf()
+    private fun ProductionDayUiModel.toEntity(id: Long) = ProducaoEntity(
+        id = id,
+        data = data,
+        diaDaSemana = diaDaSemana,
+        clientesAtendidos = clientesAtendidos,
+        turno = turno.name,
+        restauranteAberto = restauranteAberto,
+        fechada = false
     )
-
-    private fun buscarProducaoId(
-        database: SQLiteDatabase,
-        data: String,
-        turno: Turno
-    ): Long? = database.query(
-        SemSobraDatabaseHelper.TABELA_PRODUCOES,
-        arrayOf(SemSobraDatabaseHelper.COLUNA_ID),
-        "${SemSobraDatabaseHelper.COLUNA_PRODUCAO_DATA} = ? AND " +
-            "${SemSobraDatabaseHelper.COLUNA_PRODUCAO_TURNO} = ?",
-        arrayOf(data, turno.name),
-        null,
-        null,
-        null,
-        "1"
-    ).use { cursor ->
-        if (cursor.moveToFirst()) {
-            cursor.getLong(cursor.getColumnIndexOrThrow(SemSobraDatabaseHelper.COLUNA_ID))
-        } else {
-            null
-        }
-    }
-
-    private fun inserirProducao(
-        database: SQLiteDatabase,
-        producao: ProductionDayUiModel
-    ): Long = database.insertOrThrow(
-        SemSobraDatabaseHelper.TABELA_PRODUCOES,
-        null,
-        criarValoresProducao(producao)
-    )
-
-    private fun atualizarProducao(
-        database: SQLiteDatabase,
-        producaoId: Long,
-        producao: ProductionDayUiModel
-    ) {
-        database.update(
-            SemSobraDatabaseHelper.TABELA_PRODUCOES,
-            criarValoresProducao(producao),
-            "${SemSobraDatabaseHelper.COLUNA_ID} = ?",
-            arrayOf(producaoId.toString())
-        )
-    }
-
-    private fun inserirItem(
-        database: SQLiteDatabase,
-        producaoId: Long,
-        preparoId: Long,
-        quantidade: Double
-    ) {
-        val valores = ContentValues().apply {
-            put(SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID, producaoId)
-            put(SemSobraDatabaseHelper.COLUNA_ITEM_PREPARO_ID, preparoId)
-            put(
-                SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_PRODUZIDA,
-                QuantityPolicy.normalize(quantidade)
-            )
-        }
-        database.insertOrThrow(SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO, null, valores)
-    }
-
-    private fun atualizarItemDoFechamento(
-        database: SQLiteDatabase,
-        producaoId: Long,
-        item: ProductionItemUiModel
-    ) {
-        val horarioAcabou = item.horarioAcabou
-            ?.trim()
-            ?.takeIf { item.acabouAntesDoFim && it.isNotEmpty() }
-        val valores = ContentValues().apply {
-            put(
-                SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_SOBRA,
-                QuantityPolicy.normalize(item.quantidadeSobra)
-            )
-            put(
-                SemSobraDatabaseHelper.COLUNA_ITEM_ACABOU_ANTES_DO_FIM,
-                if (item.acabouAntesDoFim) 1 else 0
-            )
-            if (horarioAcabou == null) {
-                putNull(SemSobraDatabaseHelper.COLUNA_ITEM_HORARIO_ACABOU)
-            } else {
-                put(SemSobraDatabaseHelper.COLUNA_ITEM_HORARIO_ACABOU, horarioAcabou)
-            }
-        }
-        val itensAtualizados = database.update(
-            SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO,
-            valores,
-            "${SemSobraDatabaseHelper.COLUNA_ID} = ? AND " +
-                "${SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID} = ?",
-            arrayOf(item.id.toString(), producaoId.toString())
-        )
-        check(itensAtualizados == 1) { "Item da produção não encontrado" }
-    }
-
-    private fun criarValoresProducao(producao: ProductionDayUiModel) = ContentValues().apply {
-        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_DATA, producao.data)
-        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_DIA_DA_SEMANA, producao.diaDaSemana)
-        put(
-            SemSobraDatabaseHelper.COLUNA_PRODUCAO_CLIENTES_ATENDIDOS,
-            producao.clientesAtendidos
-        )
-        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_TURNO, producao.turno.name)
-        put(
-            SemSobraDatabaseHelper.COLUNA_PRODUCAO_RESTAURANTE_ABERTO,
-            if (producao.restauranteAberto) 1 else 0
-        )
-        put(SemSobraDatabaseHelper.COLUNA_PRODUCAO_FECHADA, 0)
-    }
 }
