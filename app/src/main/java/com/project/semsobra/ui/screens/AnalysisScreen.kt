@@ -35,6 +35,9 @@ fun AnalysisScreen(
 ) {
     val report = analytics.report
     val totalFaltas = report.alimentosQueMaisAcabaram.sumOf { it.quantidade }.toInt()
+    val totalSobras = report.totalSobrasPorUnidade
+        .joinToString(" • ") { "${formatQuantity(it.quantidade)} ${it.unidadeMedida}" }
+        .ifBlank { "0" }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -101,7 +104,7 @@ fun AnalysisScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetricCard(
                     title = "Sobra registrada",
-                    value = "${formatQuantity(report.totalSobras)} kg",
+                    value = totalSobras,
                     modifier = Modifier.weight(1f)
                 )
                 MetricCard(

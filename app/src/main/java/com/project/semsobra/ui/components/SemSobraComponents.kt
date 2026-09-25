@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.ui.model.ForecastItem
 import com.project.semsobra.ui.model.ProductionSummary
 import com.project.semsobra.ui.util.dayName
@@ -239,6 +240,12 @@ fun ForecastItemCard(item: ForecastItem, explain: Boolean = false) {
 
 @Composable
 fun ProductionSummaryCard(summary: ProductionSummary, showItems: Boolean = false) {
+    val leftoversByUnit = summary.items
+        .groupBy { it.food.unidadeMedida.trim().lowercase() }
+        .mapValues { (_, items) -> QuantityPolicy.sum(items.map { it.item.quantidadeSobra }) }
+        .entries
+        .joinToString(" • ") { (unit, quantity) -> "${formatQuantity(quantity)} $unit" }
+        .ifBlank { "0" }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -255,13 +262,15 @@ fun ProductionSummaryCard(summary: ProductionSummary, showItems: Boolean = false
                 fontWeight = FontWeight.Bold
             )
             Text("Clientes atendidos: ${if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos else "em aberto"}")
-            Text("Sobra total: ${formatQuantity(summary.totalSobra)} kg")
+            Text("Sobra total: $leftoversByUnit")
             if (showItems) {
                 HorizontalDivider()
                 summary.items.forEach { item ->
                     Text(
                         "${item.food.nome}: produzido ${formatQuantity(item.item.quantidadeProduzida)}, " +
-                            "consumo ${formatQuantity(item.consumo)}, sobra ${formatQuantity(item.item.quantidadeSobra)}"
+                            "consumo ${formatQuantity(item.consumo)}, " +
+                            "sobra ${formatQuantity(item.item.quantidadeSobra)} " +
+                            item.food.unidadeMedida
                     )
                     if (item.item.acabouAntesDoFim) {
                         Text("Acabou antes do fim${item.item.horarioAcabou?.let { " às $it" }.orEmpty()}")

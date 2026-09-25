@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import com.project.semsobra.data.local.SemSobraDatabaseHelper
+import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.ProductionDayUiModel
@@ -149,11 +150,11 @@ class ProducaoLocalRepository(context: Context) {
                     )
                 }
 
-                val quantidadeProduzida = cursor.getDouble(
-                    cursor.getColumnIndexOrThrow("quantidade_produzida")
+                val quantidadeProduzida = QuantityPolicy.normalize(
+                    cursor.getDouble(cursor.getColumnIndexOrThrow("quantidade_produzida"))
                 )
-                val quantidadeSobra = cursor.getDouble(
-                    cursor.getColumnIndexOrThrow("quantidade_sobra")
+                val quantidadeSobra = QuantityPolicy.normalize(
+                    cursor.getDouble(cursor.getColumnIndexOrThrow("quantidade_sobra"))
                 )
                 val preparoId = cursor.getLong(cursor.getColumnIndexOrThrow("preparo_id"))
                 val item = ProductionItemUiModel(
@@ -183,7 +184,8 @@ class ProducaoLocalRepository(context: Context) {
                 resumo.items += ProductionItemDisplay(
                     item = item,
                     food = preparo,
-                    consumo = (quantidadeProduzida - quantidadeSobra).coerceAtLeast(0.0)
+                    consumo = QuantityPolicy.subtract(quantidadeProduzida, quantidadeSobra)
+                        .coerceAtLeast(0.0)
                 )
             }
         }
@@ -192,7 +194,6 @@ class ProducaoLocalRepository(context: Context) {
             ProductionSummary(
                 day = resumo.day,
                 items = resumo.items,
-                totalSobra = resumo.items.sumOf { it.item.quantidadeSobra },
                 fechado = resumo.fechado
             )
         }
@@ -257,7 +258,10 @@ class ProducaoLocalRepository(context: Context) {
         val valores = ContentValues().apply {
             put(SemSobraDatabaseHelper.COLUNA_ITEM_PRODUCAO_ID, producaoId)
             put(SemSobraDatabaseHelper.COLUNA_ITEM_PREPARO_ID, preparoId)
-            put(SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_PRODUZIDA, quantidade)
+            put(
+                SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_PRODUZIDA,
+                QuantityPolicy.normalize(quantidade)
+            )
         }
         database.insertOrThrow(SemSobraDatabaseHelper.TABELA_ITENS_PRODUCAO, null, valores)
     }
@@ -271,7 +275,10 @@ class ProducaoLocalRepository(context: Context) {
             ?.trim()
             ?.takeIf { item.acabouAntesDoFim && it.isNotEmpty() }
         val valores = ContentValues().apply {
-            put(SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_SOBRA, item.quantidadeSobra)
+            put(
+                SemSobraDatabaseHelper.COLUNA_ITEM_QUANTIDADE_SOBRA,
+                QuantityPolicy.normalize(item.quantidadeSobra)
+            )
             put(
                 SemSobraDatabaseHelper.COLUNA_ITEM_ACABOU_ANTES_DO_FIM,
                 if (item.acabouAntesDoFim) 1 else 0

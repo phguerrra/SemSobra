@@ -51,7 +51,7 @@ fun HomeScreen(
             HeaderCard(
                 title = "Operação de hoje",
                 value = "${formatDate(today.toString())} - ${dayName(today.dayOfWeek.value)}",
-                subtitle = "Planeje a produção em kg, acompanhe sobras e registre faltas no fechamento."
+                subtitle = "Planeje as quantidades, acompanhe sobras e registre faltas no fechamento."
             )
         }
         item {

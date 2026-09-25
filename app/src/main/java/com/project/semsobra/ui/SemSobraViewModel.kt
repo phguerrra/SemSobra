@@ -7,6 +7,7 @@ import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
 import com.project.semsobra.data.repository.ProducaoLocalRepository
 import com.project.semsobra.domain.model.Preparo
+import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
@@ -25,6 +26,7 @@ import com.project.semsobra.ui.model.ProductionDayUiModel
 import com.project.semsobra.ui.model.ProductionItemDisplay
 import com.project.semsobra.ui.model.ProductionItemUiModel
 import com.project.semsobra.ui.model.ProductionSummary
+import com.project.semsobra.ui.model.QuantityByUnit
 import com.project.semsobra.ui.model.ReportSummary
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -438,8 +440,10 @@ private fun calculateAnalytics(
             val safetyFactor = if (hadShortage) 1.1 else 1.0
             ForecastItem(
                 food = food,
-                quantidadeRecomendada = averagePerCustomer * forecastCustomers * safetyFactor,
-                consumoMedioPorCliente = averagePerCustomer,
+                quantidadeRecomendada = QuantityPolicy.normalize(
+                    averagePerCustomer * forecastCustomers * safetyFactor
+                ),
+                consumoMedioPorCliente = QuantityPolicy.normalize(averagePerCustomer),
                 ajusteSegurancaAplicado = hadShortage
             )
         }
@@ -462,7 +466,7 @@ private fun calculateAnalytics(
     val leftovers = allClosedItems
         .groupBy { it.food.id }
         .mapNotNull { (_, items) ->
-            val quantity = items.sumOf { it.item.quantidadeSobra }
+            val quantity = QuantityPolicy.sum(items.map { it.item.quantidadeSobra })
             items.firstOrNull()?.food?.takeIf { quantity > 0.0 }?.let { FoodMetric(it, quantity) }
         }
         .sortedByDescending { it.quantidade }
@@ -474,6 +478,17 @@ private fun calculateAnalytics(
         }
         .sortedByDescending { it.quantidade }
 
+    val totalSobrasPorUnidade = allClosedItems
+        .groupBy { it.food.unidadeMedida.trim().lowercase() }
+        .map { (unit, items) ->
+            QuantityByUnit(
+                unidadeMedida = unit,
+                quantidade = QuantityPolicy.sum(items.map { it.item.quantidadeSobra })
+            )
+        }
+        .filter { it.quantidade > 0.0 }
+        .sortedBy(QuantityByUnit::unidadeMedida)
+
     return AnalyticsResult(
         forecast = ForecastResult(
             clientesPrevistos = forecastCustomers,
@@ -481,7 +496,7 @@ private fun calculateAnalytics(
             alerts = alerts
         ),
         report = ReportSummary(
-            totalSobras = allClosedItems.sumOf { it.item.quantidadeSobra },
+            totalSobrasPorUnidade = totalSobrasPorUnidade,
             alimentosComMaisSobra = leftovers,
             alimentosQueMaisAcabaram = shortages
         )
@@ -495,7 +510,7 @@ private fun emptyAnalytics() = AnalyticsResult(
         alerts = emptyList()
     ),
     report = ReportSummary(
-        totalSobras = 0.0,
+        totalSobrasPorUnidade = emptyList(),
         alimentosComMaisSobra = emptyList(),
         alimentosQueMaisAcabaram = emptyList()
     )

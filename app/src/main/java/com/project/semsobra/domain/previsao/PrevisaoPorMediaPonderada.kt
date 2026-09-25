@@ -1,12 +1,12 @@
 package com.project.semsobra.domain.previsao
 
+import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.FaixaHistoricaClientes
 import com.project.semsobra.domain.previsao.model.OrigemHistoricoPrevisao
 import com.project.semsobra.domain.previsao.model.QualidadePrevisao
 import com.project.semsobra.domain.previsao.model.RegistroHistoricoDemanda
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
-import kotlin.math.round
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -250,7 +250,7 @@ class PrevisaoPorMediaPonderada(
 
     private fun arredondarPeso(valor: Double): Double {
         val seguro = valor.valorSeguro()
-        return (round(seguro * 10.0) / 10.0).valorSeguro()
+        return QuantityPolicy.normalize(seguro, scale = 1).valorSeguro()
     }
 
     private data class RegistroPonderado(

@@ -74,7 +74,7 @@ fun ProductionDayScreen(
             HeaderCard(
                 title = "Produção de hoje",
                 value = formatDate(today.toString()),
-                subtitle = "Cardápio de ${dayName(today.dayOfWeek.value)}. Informe quantos kg foram preparados."
+                subtitle = "Cardápio de ${dayName(today.dayOfWeek.value)}. Informe a quantidade preparada de cada item."
             )
         }
         if (foods.isEmpty()) {

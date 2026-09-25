@@ -30,6 +30,5 @@ data class ProductionItemDisplay(
 data class ProductionSummary(
     val day: ProductionDayUiModel,
     val items: List<ProductionItemDisplay>,
-    val totalSobra: Double,
     val fechado: Boolean
 )

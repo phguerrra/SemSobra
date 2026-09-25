@@ -18,8 +18,13 @@ data class FoodMetric(
     val quantidade: Double
 )
 
+data class QuantityByUnit(
+    val unidadeMedida: String,
+    val quantidade: Double
+)
+
 data class ReportSummary(
-    val totalSobras: Double,
+    val totalSobrasPorUnidade: List<QuantityByUnit>,
     val alimentosComMaisSobra: List<FoodMetric>,
     val alimentosQueMaisAcabaram: List<FoodMetric>
 )

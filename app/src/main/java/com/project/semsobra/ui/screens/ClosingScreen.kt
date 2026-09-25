@@ -99,7 +99,7 @@ fun ClosingScreen(
                 HeaderCard(
                     title = "Fechamento do buffet",
                     value = selected?.day?.data?.let(::formatDate).orEmpty(),
-                    subtitle = "Informe clientes, sobra em kg e faltas antes do fim do atendimento."
+                    subtitle = "Informe clientes, a sobra de cada preparo e faltas antes do fim do atendimento."
                 )
             }
             item { SectionTitle("Produção selecionada") }
