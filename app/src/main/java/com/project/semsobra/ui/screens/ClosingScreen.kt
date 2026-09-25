@@ -42,9 +42,9 @@ import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.ui.components.SectionTitle
-import com.project.semsobra.ui.model.ProductionItemDisplay
-import com.project.semsobra.ui.model.ProductionItemUiModel
-import com.project.semsobra.ui.model.ProductionSummary
+import com.project.semsobra.domain.model.ProductionItemDisplay
+import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.formatQuantity

@@ -20,7 +20,7 @@ import com.project.semsobra.ui.components.ProductionSummaryCard
 import com.project.semsobra.ui.components.SectionTitle
 import com.project.semsobra.ui.components.SimpleMetricRow
 import com.project.semsobra.ui.model.AnalyticsResult
-import com.project.semsobra.ui.model.ProductionSummary
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.formatQuantity
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatPercentage

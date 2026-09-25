@@ -26,7 +26,7 @@ import com.project.semsobra.ui.components.ProductionSummaryCard
 import com.project.semsobra.ui.components.SectionTitle
 import com.project.semsobra.ui.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodUiModel
-import com.project.semsobra.ui.model.ProductionSummary
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatDate
 import java.time.LocalDate

@@ -1,4 +1,4 @@
-package com.project.semsobra.ui.model
+package com.project.semsobra.domain.model
 
 import com.project.semsobra.domain.previsao.model.Turno
 
@@ -23,7 +23,7 @@ data class ProductionItemUiModel(
 
 data class ProductionItemDisplay(
     val item: ProductionItemUiModel,
-    val food: FoodUiModel,
+    val food: Preparo,
     val consumo: Double
 )
 

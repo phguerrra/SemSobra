@@ -10,12 +10,17 @@ import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
 import com.project.semsobra.data.repository.ProducaoLocalRepository
 import com.project.semsobra.domain.model.Preparo
+import com.project.semsobra.domain.model.ProductionDayUiModel
+import com.project.semsobra.domain.model.ProductionItemDisplay
+import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
+import com.project.semsobra.domain.repository.ProducaoRepository
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
@@ -25,10 +30,6 @@ import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.model.ForecastItem
 import com.project.semsobra.ui.model.ForecastResult
-import com.project.semsobra.ui.model.ProductionDayUiModel
-import com.project.semsobra.ui.model.ProductionItemDisplay
-import com.project.semsobra.ui.model.ProductionItemUiModel
-import com.project.semsobra.ui.model.ProductionSummary
 import com.project.semsobra.ui.model.QuantityByUnit
 import com.project.semsobra.ui.model.ReportSummary
 import com.project.semsobra.ui.model.UiEvent
@@ -71,7 +72,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val excluirPreparo = ExcluirPreparoUseCase(preparoRepository)
     private val validarDadosProducao = ValidarDadosProducaoUseCase()
     private val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
-    private val producaoRepository = ProducaoLocalRepository(application)
+    private val producaoRepository: ProducaoRepository = ProducaoLocalRepository(application)
 
     private val _uiState = MutableStateFlow(
         SemSobraUiState(previsaoDemanda = calcularPrevisaoDemanda(emptyList()))
@@ -97,15 +98,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 val (preparos, historico) = withContext(Dispatchers.IO) {
                     preparoRepository.listarTodos() to producaoRepository.listarHistorico()
                 }
-                val foods = preparos.map { preparo ->
-                    FoodUiModel(
-                        id = preparo.id,
-                        nome = preparo.nome,
-                        descricao = preparo.descricao,
-                        unidadeMedida = preparo.unidadeMedida,
-                        diaDaSemana = preparo.diaDaSemana
-                    )
-                }
+                val foods = preparos.map(Preparo::toFoodUiModel)
 
                 updateState(foods, historico)
                 _uiState.value = _uiState.value.copy(isLoading = false, loadError = null)
@@ -133,21 +126,13 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         val preparos = withContext(Dispatchers.IO) {
             preparoRepository.listarTodos()
         }
-        val foods = preparos.map { preparo ->
-            FoodUiModel(
-                id = preparo.id,
-                nome = preparo.nome,
-                descricao = preparo.descricao,
-                unidadeMedida = preparo.unidadeMedida,
-                diaDaSemana = preparo.diaDaSemana
-            )
-        }
+        val foods = preparos.map(Preparo::toFoodUiModel)
         val foodsById = foods.associateBy(FoodUiModel::id)
         val summaries = productionSummaries.map { summary ->
             summary.copy(
                 items = summary.items.map { display ->
                     val savedFood = foodsById[display.food.id]
-                    if (savedFood == null) display else display.copy(food = savedFood)
+                    if (savedFood == null) display else display.copy(food = savedFood.toPreparo())
                 }
             )
         }
@@ -580,14 +565,18 @@ private fun calculateAnalytics(
         .groupBy { it.food.id }
         .mapNotNull { (_, items) ->
             val quantity = QuantityPolicy.sum(items.map { it.item.quantidadeSobra })
-            items.firstOrNull()?.food?.takeIf { quantity > 0.0 }?.let { FoodMetric(it, quantity) }
+            items.firstOrNull()?.food?.takeIf { quantity > 0.0 }?.let {
+                FoodMetric(it.toFoodUiModel(), quantity)
+            }
         }
         .sortedByDescending { it.quantidade }
     val shortages = allClosedItems
         .filter { it.item.acabouAntesDoFim }
         .groupBy { it.food.id }
         .mapNotNull { (_, items) ->
-            items.firstOrNull()?.food?.let { FoodMetric(it, items.size.toDouble()) }
+            items.firstOrNull()?.food?.let {
+                FoodMetric(it.toFoodUiModel(), items.size.toDouble())
+            }
         }
         .sortedByDescending { it.quantidade }
 
@@ -627,4 +616,20 @@ private fun emptyAnalytics() = AnalyticsResult(
         alimentosComMaisSobra = emptyList(),
         alimentosQueMaisAcabaram = emptyList()
     )
+)
+
+private fun Preparo.toFoodUiModel() = FoodUiModel(
+    id = id,
+    nome = nome,
+    descricao = descricao,
+    unidadeMedida = unidadeMedida,
+    diaDaSemana = diaDaSemana
+)
+
+private fun FoodUiModel.toPreparo() = Preparo(
+    id,
+    nome,
+    descricao,
+    unidadeMedida,
+    diaDaSemana
 )

@@ -35,7 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.ui.model.ForecastItem
-import com.project.semsobra.ui.model.ProductionSummary
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatQuantity

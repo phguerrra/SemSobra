@@ -1,8 +1,8 @@
 package com.project.semsobra.data.mapper
 
 import com.project.semsobra.domain.model.QuantityPolicy
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.previsao.model.RegistroHistoricoDemanda
-import com.project.semsobra.ui.model.ProductionSummary
 import java.time.LocalDate
 
 class HistoricoProducaoMapper {

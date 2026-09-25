@@ -5,24 +5,25 @@ import com.project.semsobra.data.local.room.HistoricoRow
 import com.project.semsobra.data.local.room.ItemProducaoEntity
 import com.project.semsobra.data.local.room.ProducaoEntity
 import com.project.semsobra.data.local.room.SemSobraDatabase
+import com.project.semsobra.domain.model.Preparo
+import com.project.semsobra.domain.model.ProductionDayUiModel
+import com.project.semsobra.domain.model.ProductionItemDisplay
+import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.Turno
-import com.project.semsobra.ui.model.FoodUiModel
-import com.project.semsobra.ui.model.ProductionDayUiModel
-import com.project.semsobra.ui.model.ProductionItemDisplay
-import com.project.semsobra.ui.model.ProductionItemUiModel
-import com.project.semsobra.ui.model.ProductionSummary
+import com.project.semsobra.domain.repository.ProducaoRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class ProducaoLocalRepository(context: Context) {
+class ProducaoLocalRepository(context: Context) : ProducaoRepository {
     private val database = SemSobraDatabase.getInstance(context)
     private val dao = database.producaoDao()
 
-    fun observarHistorico(): Flow<List<ProductionSummary>> =
+    override fun observarHistorico(): Flow<List<ProductionSummary>> =
         dao.observarHistorico().map(::mapearHistorico)
 
-    fun salvarProducao(
+    override fun salvarProducao(
         producao: ProductionDayUiModel,
         quantidadesPorPreparo: Map<Long, Double>
     ): Long {
@@ -55,7 +56,7 @@ class ProducaoLocalRepository(context: Context) {
         return resultado
     }
 
-    fun fecharProducao(
+    override fun fecharProducao(
         producaoId: Long,
         clientesAtendidos: Int,
         itens: List<ProductionItemUiModel>
@@ -85,7 +86,7 @@ class ProducaoLocalRepository(context: Context) {
         }
     }
 
-    fun listarHistorico(): List<ProductionSummary> = mapearHistorico(dao.listarHistorico())
+    override fun listarHistorico(): List<ProductionSummary> = mapearHistorico(dao.listarHistorico())
 
     private fun mapearHistorico(rows: List<HistoricoRow>): List<ProductionSummary> = rows
         .groupBy(HistoricoRow::producaoId)
@@ -119,12 +120,12 @@ class ProducaoLocalRepository(context: Context) {
             acabouAntesDoFim = row.acabouAntesDoFim,
             horarioAcabou = row.horarioAcabou
         )
-        val food = FoodUiModel(
-            id = row.preparoId,
-            nome = row.nome,
-            descricao = row.descricao,
-            unidadeMedida = row.unidadeMedida,
-            diaDaSemana = row.preparoDiaDaSemana
+        val food = Preparo(
+            row.preparoId,
+            row.nome,
+            row.descricao,
+            row.unidadeMedida,
+            row.preparoDiaDaSemana
         )
         return ProductionItemDisplay(
             item = item,
