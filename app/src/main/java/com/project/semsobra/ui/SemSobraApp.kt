@@ -30,13 +30,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.project.semsobra.ui.navigation.AppRoute
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.model.UiEvent
@@ -50,7 +53,9 @@ import java.time.LocalDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
-    var currentRoute by rememberSaveable { androidx.compose.runtime.mutableStateOf(AppRoute.Home) }
+    val navController = rememberNavController()
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = AppRoute.fromRoute(backStackEntry?.destination?.route)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val today = LocalDate.now()
@@ -104,7 +109,13 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
             if (!uiState.isLoading && uiState.loadError == null) {
                 SemSobraBottomBar(
                     currentRoute = currentRoute,
-                    onRouteSelected = { currentRoute = it }
+                    onRouteSelected = { route ->
+                        navController.navigate(route.route) {
+                            popUpTo(AppRoute.Home.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
                 )
             }
         },
@@ -121,45 +132,78 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
                     message = uiState.loadError.orEmpty(),
                     onRetry = viewModel::retryInitialLoad
                 )
-                else -> when (currentRoute) {
-                AppRoute.Home -> HomeScreen(
-                    analytics = uiState.analytics,
-                    foods = foodsToday,
-                    summaries = uiState.productionSummaries,
-                    onRegisterProduction = { currentRoute = AppRoute.Production },
-                    modifier = Modifier
-                )
-                AppRoute.Foods -> FoodScreen(
-                    foods = uiState.foods,
-                    saveStatus = uiState.foodSaveStatus,
-                    deleteStatus = uiState.foodDeleteStatus,
-                    onSave = viewModel::saveFood,
-                    onSaveResultConsumed = viewModel::consumeFoodSaveResult,
-                    onDelete = viewModel::deleteFood,
-                    onDeleteResultConsumed = viewModel::consumeFoodDeleteResult,
-                    modifier = Modifier
-                )
-                AppRoute.Production -> ProductionDayScreen(
-                    foods = foodsToday,
-                    saveStatus = uiState.productionSaveStatus,
-                    onSave = viewModel::saveProductionToday,
-                    onSaveResultConsumed = viewModel::consumeProductionSaveResult,
-                    modifier = Modifier
-                )
-                AppRoute.Closing -> ClosingScreen(
-                    summaries = uiState.productionSummaries,
-                    saveStatus = uiState.closingSaveStatus,
-                    onClose = viewModel::closeProduction,
-                    modifier = Modifier
-                )
-                AppRoute.Analysis -> AnalysisScreen(
-                    analytics = uiState.analytics,
-                    previsaoDemanda = uiState.previsaoDemanda,
-                    summaries = uiState.productionSummaries,
-                    modifier = Modifier
+                else -> AppNavigation(
+                    navController = navController,
+                    uiState = uiState,
+                    foodsToday = foodsToday,
+                    viewModel = viewModel
                 )
             }
-            }
+        }
+    }
+}
+
+@Composable
+private fun AppNavigation(
+    navController: NavHostController,
+    uiState: SemSobraUiState,
+    foodsToday: List<com.project.semsobra.ui.model.FoodUiModel>,
+    viewModel: SemSobraViewModel
+) {
+    NavHost(navController = navController, startDestination = AppRoute.Home.route) {
+        composable(AppRoute.Home.route) {
+            HomeScreen(
+                analytics = uiState.analytics,
+                foods = foodsToday,
+                summaries = uiState.productionSummaries,
+                onOpenProduction = { navController.navigate(AppRoute.Production.route) },
+                onOpenClosing = { navController.navigate(AppRoute.Closing.route) },
+                onOpenAnalysis = { navController.navigate(AppRoute.Analysis.route) }
+            )
+        }
+        composable(AppRoute.Foods.route) {
+            FoodScreen(
+                foods = uiState.foods,
+                saveStatus = uiState.foodSaveStatus,
+                deleteStatus = uiState.foodDeleteStatus,
+                onSave = viewModel::saveFood,
+                onSaveResultConsumed = viewModel::consumeFoodSaveResult,
+                onDelete = viewModel::deleteFood,
+                onDeleteResultConsumed = viewModel::consumeFoodDeleteResult
+            )
+        }
+        composable(AppRoute.Production.route) {
+            ProductionDayScreen(
+                foods = foodsToday,
+                saveStatus = uiState.productionSaveStatus,
+                onSave = viewModel::saveProductionToday,
+                onGoHome = {
+                    viewModel.consumeProductionSaveResult()
+                    navController.navigate(AppRoute.Home.route) {
+                        popUpTo(AppRoute.Home.route) { inclusive = true }
+                    }
+                },
+                onGoToClosing = {
+                    viewModel.consumeProductionSaveResult()
+                    navController.navigate(AppRoute.Closing.route) {
+                        popUpTo(AppRoute.Home.route)
+                    }
+                }
+            )
+        }
+        composable(AppRoute.Closing.route) {
+            ClosingScreen(
+                summaries = uiState.productionSummaries,
+                saveStatus = uiState.closingSaveStatus,
+                onClose = viewModel::closeProduction
+            )
+        }
+        composable(AppRoute.Analysis.route) {
+            AnalysisScreen(
+                analytics = uiState.analytics,
+                previsaoDemanda = uiState.previsaoDemanda,
+                summaries = uiState.productionSummaries
+            )
         }
     }
 }

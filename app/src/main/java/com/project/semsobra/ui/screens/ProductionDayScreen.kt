@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,8 +26,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -49,7 +50,8 @@ fun ProductionDayScreen(
     foods: List<FoodUiModel>,
     saveStatus: SaveStatus,
     onSave: (Map<Long, Double>) -> Unit,
-    onSaveResultConsumed: () -> Unit,
+    onGoHome: () -> Unit,
+    onGoToClosing: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val quantities = remember { mutableStateMapOf<Long, String>() }
@@ -57,12 +59,18 @@ fun ProductionDayScreen(
     val validator = remember { ValidarDadosProducaoUseCase() }
     val today = LocalDate.now()
 
-    LaunchedEffect(saveStatus) {
-        if (saveStatus == SaveStatus.SUCCESS) {
-            quantities.clear()
-            errors.clear()
-            onSaveResultConsumed()
-        }
+    if (saveStatus == SaveStatus.SUCCESS) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Produção salva") },
+            text = { Text("A produção de hoje foi registrada. Qual é a próxima etapa?") },
+            dismissButton = {
+                TextButton(onClick = onGoHome) { Text("Ir para início") }
+            },
+            confirmButton = {
+                Button(onClick = onGoToClosing) { Text("Ir para fechamento") }
+            }
+        )
     }
 
     LazyColumn(

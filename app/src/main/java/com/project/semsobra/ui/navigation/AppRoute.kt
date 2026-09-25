@@ -17,5 +17,11 @@ enum class  AppRoute(
     Foods("Preparo do Buffet", "Preparo", Icons.Filled.Fastfood),
     Production("Produção do Dia", "Produção", Icons.Filled.Restaurant),
     Closing("Fechamento", "Fechar", Icons.Filled.CheckCircle),
-    Analysis("Análise", "Análise", Icons.Filled.Assessment)
+    Analysis("Análise", "Análise", Icons.Filled.Assessment);
+
+    val route: String = name.lowercase()
+
+    companion object {
+        fun fromRoute(route: String?): AppRoute = entries.firstOrNull { it.route == route } ?: Home
+    }
 }

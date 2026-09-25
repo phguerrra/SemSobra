@@ -36,11 +36,30 @@ fun HomeScreen(
     analytics: AnalyticsResult,
     foods: List<FoodUiModel>,
     summaries: List<ProductionSummary>,
-    onRegisterProduction: () -> Unit,
+    onOpenProduction: () -> Unit,
+    onOpenClosing: () -> Unit,
+    onOpenAnalysis: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val today = LocalDate.now()
     val todaySummary = summaries.firstOrNull { it.day.data == today.toString() }
+    val nextAction = when {
+        todaySummary == null -> Triple(
+            "Registrar produção",
+            "Comece informando as quantidades preparadas hoje.",
+            onOpenProduction
+        )
+        !todaySummary.fechado -> Triple(
+            "Ir para fechamento",
+            "A produção já foi registrada. O fechamento é a próxima etapa.",
+            onOpenClosing
+        )
+        else -> Triple(
+            "Ver análise do dia",
+            "O fluxo de hoje está concluído. Consulte os resultados atualizados.",
+            onOpenAnalysis
+        )
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -75,8 +94,24 @@ fun HomeScreen(
             )
         }
         item {
-            Button(onClick = onRegisterProduction, modifier = Modifier.fillMaxWidth()) {
-                Text("Registrar produção do dia")
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        "Próxima ação",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(nextAction.second, style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = nextAction.third, modifier = Modifier.fillMaxWidth()) {
+                        Text(nextAction.first)
+                    }
+                }
             }
         }
         item { SectionTitle("Produção recomendada") }
