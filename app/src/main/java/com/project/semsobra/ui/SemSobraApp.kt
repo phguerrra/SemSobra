@@ -1,16 +1,20 @@
 package com.project.semsobra.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -29,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -96,21 +101,33 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
             )
         },
         bottomBar = {
-            SemSobraBottomBar(
-                currentRoute = currentRoute,
-                onRouteSelected = { currentRoute = it }
-            )
+            if (!uiState.isLoading && uiState.loadError == null) {
+                SemSobraBottomBar(
+                    currentRoute = currentRoute,
+                    onRouteSelected = { currentRoute = it }
+                )
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (currentRoute) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            when {
+                uiState.isLoading -> InitialLoadingState()
+                uiState.loadError != null -> InitialErrorState(
+                    message = uiState.loadError.orEmpty(),
+                    onRetry = viewModel::retryInitialLoad
+                )
+                else -> when (currentRoute) {
                 AppRoute.Home -> HomeScreen(
                     analytics = uiState.analytics,
                     foods = foodsToday,
                     summaries = uiState.productionSummaries,
                     onRegisterProduction = { currentRoute = AppRoute.Production },
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier
                 )
                 AppRoute.Foods -> FoodScreen(
                     foods = uiState.foods,
@@ -120,27 +137,73 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
                     onSaveResultConsumed = viewModel::consumeFoodSaveResult,
                     onDelete = viewModel::deleteFood,
                     onDeleteResultConsumed = viewModel::consumeFoodDeleteResult,
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier
                 )
                 AppRoute.Production -> ProductionDayScreen(
                     foods = foodsToday,
                     saveStatus = uiState.productionSaveStatus,
                     onSave = viewModel::saveProductionToday,
                     onSaveResultConsumed = viewModel::consumeProductionSaveResult,
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier
                 )
                 AppRoute.Closing -> ClosingScreen(
                     summaries = uiState.productionSummaries,
+                    saveStatus = uiState.closingSaveStatus,
                     onClose = viewModel::closeProduction,
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier
                 )
                 AppRoute.Analysis -> AnalysisScreen(
                     analytics = uiState.analytics,
                     previsaoDemanda = uiState.previsaoDemanda,
                     summaries = uiState.productionSummaries,
-                    modifier = Modifier.padding(padding)
+                    modifier = Modifier
                 )
             }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InitialLoadingState() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        CircularProgressIndicator()
+        Spacer(Modifier.size(20.dp))
+        Text("Carregando seus dados...", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.size(6.dp))
+        Text(
+            "Preparando cardápio, histórico e previsões.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun InitialErrorState(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Não foi possível abrir o SemSobra", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.size(8.dp))
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.size(20.dp))
+        Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+            Text("Tentar novamente")
         }
     }
 }

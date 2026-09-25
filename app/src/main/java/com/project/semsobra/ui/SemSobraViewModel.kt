@@ -46,12 +46,15 @@ import kotlinx.coroutines.withContext
 
 data class SemSobraUiState(
     val previsaoDemanda: ResultadoPrevisao,
+    val isLoading: Boolean = true,
+    val loadError: String? = null,
     val foods: List<FoodUiModel> = emptyList(),
     val productionSummaries: List<ProductionSummary> = emptyList(),
     val analytics: AnalyticsResult = emptyAnalytics(),
     val foodSaveStatus: SaveStatus = SaveStatus.IDLE,
     val productionSaveStatus: SaveStatus = SaveStatus.IDLE,
-    val foodDeleteStatus: SaveStatus = SaveStatus.IDLE
+    val foodDeleteStatus: SaveStatus = SaveStatus.IDLE,
+    val closingSaveStatus: SaveStatus = SaveStatus.IDLE
 )
 
 enum class SaveStatus {
@@ -82,6 +85,12 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         carregarDadosIniciais()
     }
 
+    fun retryInitialLoad() {
+        if (_uiState.value.isLoading) return
+        _uiState.value = _uiState.value.copy(isLoading = true, loadError = null)
+        carregarDadosIniciais()
+    }
+
     private fun carregarDadosIniciais() {
         viewModelScope.launch {
             try {
@@ -99,11 +108,20 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 updateState(foods, historico)
+                _uiState.value = _uiState.value.copy(isLoading = false, loadError = null)
             } catch (error: SQLiteException) {
                 reportPersistenceError("carregar dados iniciais", error)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    loadError = "Não foi possível carregar os dados salvos"
+                )
                 emitMessage(UiMessage.Persistence("Não foi possível carregar os dados salvos"))
             } catch (error: RuntimeException) {
                 reportUnexpectedError("carregar dados iniciais", error)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    loadError = "Ocorreu um erro ao carregar os dados"
+                )
                 emitMessage(UiMessage.Persistence("Ocorreu um erro ao carregar os dados"))
             }
         }
@@ -356,6 +374,8 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         clientesAtendidos: Int,
         closingItems: List<ProductionItemUiModel>
     ) {
+        if (_uiState.value.closingSaveStatus == SaveStatus.SAVING) return
+
         try {
             validarDadosProducao.validarClientesAtendidos(clientesAtendidos)
         } catch (error: IllegalArgumentException) {
@@ -395,6 +415,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             tryEmitMessage(UiMessage.Validation(error.message ?: "Dados do fechamento inválidos"))
             return
         }
+        setClosingSaveStatus(SaveStatus.SAVING)
         viewModelScope.launch {
             try {
                 val savedHistory = withContext(Dispatchers.IO) {
@@ -406,18 +427,23 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     producaoRepository.listarHistorico()
                 }
                 updateState(_uiState.value.foods, savedHistory)
+                setClosingSaveStatus(SaveStatus.SUCCESS)
                 emitMessage(UiMessage.Success("Fechamento salvo"))
             } catch (error: SQLiteConstraintException) {
                 reportPersistenceError("salvar fechamento com dados conflitantes", error)
+                setClosingSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Conflict("Os dados do fechamento entram em conflito com a produção salva"))
             } catch (error: SQLiteException) {
                 reportPersistenceError("salvar fechamento", error)
+                setClosingSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Persistence("Não foi possível salvar o fechamento"))
             } catch (error: IllegalStateException) {
                 Log.w(LOG_TAG, "Produção ou item não encontrado durante fechamento", error)
+                setClosingSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.NotFound("A produção ou um de seus itens não foi encontrado"))
             } catch (error: RuntimeException) {
                 reportUnexpectedError("salvar fechamento", error)
+                setClosingSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Persistence("Ocorreu um erro ao salvar o fechamento"))
             }
         }
@@ -484,6 +510,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
     private fun setFoodDeleteStatus(status: SaveStatus) {
         _uiState.value = _uiState.value.copy(foodDeleteStatus = status)
+    }
+
+    private fun setClosingSaveStatus(status: SaveStatus) {
+        _uiState.value = _uiState.value.copy(closingSaveStatus = status)
     }
 
     private fun calcularPrevisaoDemanda(
