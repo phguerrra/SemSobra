@@ -9,7 +9,7 @@ public class PreparoTest {
 
     @Test
     public void deveNormalizarOsDadosDoPreparo() {
-        Preparo preparo = new Preparo("  Arroz branco  ", null, "  kg  ", 2);
+        Preparo preparo = new Preparo("  ARROZ   BRANCO  ", null, "  kg  ", 2);
 
         assertEquals("Arroz branco", preparo.getNome());
         assertEquals("", preparo.getDescricao());
@@ -22,6 +22,15 @@ public class PreparoTest {
         Preparo preparo = new Preparo("Feijão", "", " ", Preparo.TODOS_OS_DIAS);
 
         assertEquals("kg", preparo.getUnidadeMedida());
+    }
+
+    @Test
+    public void deveNormalizarVariacoesDeEspacosEMaiusculasParaOMesmoNome() {
+        Preparo primeiro = new Preparo("ARROZ   BRANCO", "", "kg", 1);
+        Preparo segundo = new Preparo("  arroz branco  ", "", "kg", 2);
+
+        assertEquals(primeiro.getNome(), segundo.getNome());
+        assertEquals("Arroz branco", primeiro.getNome());
     }
 
     @Test

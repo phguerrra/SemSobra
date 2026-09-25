@@ -19,7 +19,7 @@ public interface PreparoRepository {
 
     boolean inativar(long id);
 
-    boolean existeNome(String nome, Long idIgnorado);
+    boolean existeNome(String nome, int diaDaSemana, Long idIgnorado);
 
     boolean estaEmUsoNoHistorico(long id);
 }

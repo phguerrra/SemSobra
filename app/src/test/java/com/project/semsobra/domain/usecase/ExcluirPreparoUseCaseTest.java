@@ -113,7 +113,7 @@ public class ExcluirPreparoUseCaseTest {
         }
 
         @Override
-        public boolean existeNome(String nome, Long idIgnorado) {
+        public boolean existeNome(String nome, int diaDaSemana, Long idIgnorado) {
             throw new UnsupportedOperationException();
         }
     }

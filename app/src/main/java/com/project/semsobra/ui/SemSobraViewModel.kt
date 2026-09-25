@@ -158,7 +158,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val nomeDisponivel = withContext(Dispatchers.IO) {
-                    validarNomePreparo.estaDisponivel(nome, null)
+                    validarNomePreparo.estaDisponivel(nome, diaDaSemana, null)
                 }
                 if (!nomeDisponivel) {
                     setFoodSaveStatus(SaveStatus.ERROR)
@@ -191,7 +191,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val nomeDisponivel = withContext(Dispatchers.IO) {
-                    validarNomePreparo.estaDisponivel(nome, id)
+                    validarNomePreparo.estaDisponivel(nome, diaDaSemana, id)
                 }
                 if (!nomeDisponivel) {
                     setFoodSaveStatus(SaveStatus.ERROR)

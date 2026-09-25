@@ -1,5 +1,7 @@
 package com.project.semsobra.domain.model;
 
+import java.util.Locale;
+
 public final class Preparo {
 
     public static final int TODOS_OS_DIAS = 0;
@@ -23,7 +25,7 @@ public final class Preparo {
         }
 
         this.id = id;
-        this.nome = nome.trim();
+        this.nome = normalizarNome(nome);
         this.descricao = descricao == null ? "" : descricao.trim();
         this.unidadeMedida = unidadeMedida == null || unidadeMedida.isBlank()
                 ? "kg"
@@ -49,5 +51,18 @@ public final class Preparo {
 
     public int getDiaDaSemana() {
         return diaDaSemana;
+    }
+
+    public static String normalizarNome(String nome) {
+        if (nome == null) {
+            return "";
+        }
+        String semEspacosDuplicados = nome.trim().replaceAll("\\s+", " ");
+        if (semEspacosDuplicados.isEmpty()) {
+            return "";
+        }
+        String minusculo = semEspacosDuplicados.toLowerCase(Locale.forLanguageTag("pt-BR"));
+        return minusculo.substring(0, 1).toUpperCase(Locale.forLanguageTag("pt-BR")) +
+                minusculo.substring(1);
     }
 }

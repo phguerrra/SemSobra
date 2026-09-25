@@ -112,11 +112,13 @@ public final class PreparoLocalRepository implements PreparoRepository {
     }
 
     @Override
-    public boolean existeNome(String nome, Long idIgnorado) {
+    public boolean existeNome(String nome, int diaDaSemana, Long idIgnorado) {
         SQLiteDatabase database = databaseHelper.getReadableDatabase();
-        String selecao = SemSobraDatabaseHelper.COLUNA_NOME + " = ?";
+        String selecao = SemSobraDatabaseHelper.COLUNA_NOME + " = ? COLLATE NOCASE AND " +
+                SemSobraDatabaseHelper.COLUNA_DIA_DA_SEMANA + " = ?";
         List<String> argumentos = new ArrayList<>();
-        argumentos.add(nome.trim());
+        argumentos.add(Preparo.normalizarNome(nome));
+        argumentos.add(String.valueOf(diaDaSemana));
 
         if (idIgnorado != null) {
             selecao += " AND " + SemSobraDatabaseHelper.COLUNA_ID + " <> ?";

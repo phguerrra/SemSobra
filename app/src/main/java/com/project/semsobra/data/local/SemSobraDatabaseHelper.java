@@ -7,7 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "semsobra.db";
-    private static final int DATABASE_VERSION = 3;
+    private static final int DATABASE_VERSION = 4;
 
     public static final String TABELA_PREPAROS = "preparos";
     public static final String COLUNA_ID = "id";
@@ -62,13 +62,14 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
         database.execSQL(
                 "CREATE TABLE " + TABELA_PREPAROS + " (" +
                         COLUNA_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                        COLUNA_NOME + " TEXT NOT NULL COLLATE NOCASE UNIQUE, " +
+                        COLUNA_NOME + " TEXT NOT NULL COLLATE NOCASE, " +
                         COLUNA_DESCRICAO + " TEXT NOT NULL DEFAULT '', " +
                         COLUNA_UNIDADE_MEDIDA + " TEXT NOT NULL, " +
                         COLUNA_DIA_DA_SEMANA + " INTEGER NOT NULL " +
                         "CHECK (" + COLUNA_DIA_DA_SEMANA + " BETWEEN 0 AND 7), " +
                         COLUNA_ATIVO + " INTEGER NOT NULL DEFAULT 1 " +
-                        "CHECK (" + COLUNA_ATIVO + " IN (0, 1))" +
+                        "CHECK (" + COLUNA_ATIVO + " IN (0, 1)), " +
+                        "UNIQUE (" + COLUNA_NOME + ", " + COLUNA_DIA_DA_SEMANA + ")" +
                         ")"
         );
     }
@@ -131,5 +132,37 @@ public final class SemSobraDatabaseHelper extends SQLiteOpenHelper {
                             "CHECK (" + COLUNA_ATIVO + " IN (0, 1))"
             );
         }
+        if (oldVersion < 4) {
+            migrarUnicidadeDePreparos(database);
+        }
+    }
+
+    private void migrarUnicidadeDePreparos(SQLiteDatabase database) {
+        String tabelaNova = TABELA_PREPAROS + "_nova";
+        database.execSQL("PRAGMA defer_foreign_keys = ON");
+        database.execSQL(
+                "CREATE TABLE " + tabelaNova + " (" +
+                        COLUNA_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        COLUNA_NOME + " TEXT NOT NULL COLLATE NOCASE, " +
+                        COLUNA_DESCRICAO + " TEXT NOT NULL DEFAULT '', " +
+                        COLUNA_UNIDADE_MEDIDA + " TEXT NOT NULL, " +
+                        COLUNA_DIA_DA_SEMANA + " INTEGER NOT NULL " +
+                        "CHECK (" + COLUNA_DIA_DA_SEMANA + " BETWEEN 0 AND 7), " +
+                        COLUNA_ATIVO + " INTEGER NOT NULL DEFAULT 1 " +
+                        "CHECK (" + COLUNA_ATIVO + " IN (0, 1)), " +
+                        "UNIQUE (" + COLUNA_NOME + ", " + COLUNA_DIA_DA_SEMANA + ")" +
+                        ")"
+        );
+        database.execSQL(
+                "INSERT INTO " + tabelaNova + " (" +
+                        COLUNA_ID + ", " + COLUNA_NOME + ", " + COLUNA_DESCRICAO + ", " +
+                        COLUNA_UNIDADE_MEDIDA + ", " + COLUNA_DIA_DA_SEMANA + ", " +
+                        COLUNA_ATIVO + ") SELECT " +
+                        COLUNA_ID + ", " + COLUNA_NOME + ", " + COLUNA_DESCRICAO + ", " +
+                        COLUNA_UNIDADE_MEDIDA + ", " + COLUNA_DIA_DA_SEMANA + ", " +
+                        COLUNA_ATIVO + " FROM " + TABELA_PREPAROS
+        );
+        database.execSQL("DROP TABLE " + TABELA_PREPAROS);
+        database.execSQL("ALTER TABLE " + tabelaNova + " RENAME TO " + TABELA_PREPAROS);
     }
 }

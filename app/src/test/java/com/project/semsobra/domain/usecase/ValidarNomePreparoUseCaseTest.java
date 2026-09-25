@@ -19,8 +19,9 @@ public class ValidarNomePreparoUseCaseTest {
         RepositorioFalso repository = new RepositorioFalso(false);
         ValidarNomePreparoUseCase useCase = new ValidarNomePreparoUseCase(repository);
 
-        assertTrue(useCase.estaDisponivel("  Arroz branco  ", null));
+        assertTrue(useCase.estaDisponivel("  Arroz   branco  ", 2, null));
         assertEquals("Arroz branco", repository.nomeConsultado);
+        assertEquals(2, repository.diaConsultado);
     }
 
     @Test
@@ -28,7 +29,7 @@ public class ValidarNomePreparoUseCaseTest {
         RepositorioFalso repository = new RepositorioFalso(true);
         ValidarNomePreparoUseCase useCase = new ValidarNomePreparoUseCase(repository);
 
-        assertFalse(useCase.estaDisponivel("Arroz branco", null));
+        assertFalse(useCase.estaDisponivel("Arroz branco", 2, null));
     }
 
     @Test
@@ -36,7 +37,7 @@ public class ValidarNomePreparoUseCaseTest {
         RepositorioFalso repository = new RepositorioFalso(false);
         ValidarNomePreparoUseCase useCase = new ValidarNomePreparoUseCase(repository);
 
-        assertTrue(useCase.estaDisponivel("Arroz branco", 15L));
+        assertTrue(useCase.estaDisponivel("Arroz branco", 2, 15L));
         assertEquals(Long.valueOf(15L), repository.idIgnorado);
     }
 
@@ -45,7 +46,7 @@ public class ValidarNomePreparoUseCaseTest {
         RepositorioFalso repository = new RepositorioFalso(false);
         ValidarNomePreparoUseCase useCase = new ValidarNomePreparoUseCase(repository);
 
-        assertFalse(useCase.estaDisponivel(" ", null));
+        assertFalse(useCase.estaDisponivel(" ", 2, null));
         assertEquals(0, repository.quantidadeConsultas);
     }
 
@@ -54,6 +55,7 @@ public class ValidarNomePreparoUseCaseTest {
         private final boolean nomeEmUso;
         private String nomeConsultado;
         private Long idIgnorado;
+        private int diaConsultado;
         private int quantidadeConsultas;
 
         private RepositorioFalso(boolean nomeEmUso) {
@@ -61,8 +63,9 @@ public class ValidarNomePreparoUseCaseTest {
         }
 
         @Override
-        public boolean existeNome(String nome, Long idIgnorado) {
+        public boolean existeNome(String nome, int diaDaSemana, Long idIgnorado) {
             this.nomeConsultado = nome;
+            this.diaConsultado = diaDaSemana;
             this.idIgnorado = idIgnorado;
             quantidadeConsultas++;
             return nomeEmUso;

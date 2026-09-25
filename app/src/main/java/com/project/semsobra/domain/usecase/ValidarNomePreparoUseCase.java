@@ -10,11 +10,12 @@ public final class ValidarNomePreparoUseCase {
         this.repository = repository;
     }
 
-    public boolean estaDisponivel(String nome, Long idAtual) {
+    public boolean estaDisponivel(String nome, int diaDaSemana, Long idAtual) {
         if (nome == null || nome.isBlank()) {
             return false;
         }
 
-        return !repository.existeNome(nome.trim(), idAtual);
+        String nomeNormalizado = com.project.semsobra.domain.model.Preparo.normalizarNome(nome);
+        return !repository.existeNome(nomeNormalizado, diaDaSemana, idAtual);
     }
 }
