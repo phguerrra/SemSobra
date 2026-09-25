@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.project.semsobra.ui.navigation.AppRoute
 import com.project.semsobra.ui.model.disponivelNoDia
+import com.project.semsobra.ui.model.UiEvent
 import com.project.semsobra.ui.screens.AnalysisScreen
 import com.project.semsobra.ui.screens.ClosingScreen
 import com.project.semsobra.ui.screens.FoodScreen
@@ -51,8 +52,10 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
     val foodsToday = uiState.foods.filter { it.disponivelNoDia(today.dayOfWeek.value) }
 
     LaunchedEffect(viewModel) {
-        viewModel.messages.collect { message ->
-            snackbarHostState.showSnackbar(message)
+        viewModel.events.collect { event ->
+            when (event) {
+                is UiEvent.ShowMessage -> snackbarHostState.showSnackbar(event.message.text)
+            }
         }
     }
 

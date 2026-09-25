@@ -1,6 +1,9 @@
 package com.project.semsobra.ui
 
 import android.app.Application
+import android.database.sqlite.SQLiteConstraintException
+import android.database.sqlite.SQLiteException
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
@@ -28,6 +31,8 @@ import com.project.semsobra.ui.model.ProductionItemUiModel
 import com.project.semsobra.ui.model.ProductionSummary
 import com.project.semsobra.ui.model.QuantityByUnit
 import com.project.semsobra.ui.model.ReportSummary
+import com.project.semsobra.ui.model.UiEvent
+import com.project.semsobra.ui.model.UiMessage
 import java.time.LocalDate
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,8 +75,8 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     )
     val uiState: StateFlow<SemSobraUiState> = _uiState.asStateFlow()
 
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
+    private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<UiEvent> = _events.asSharedFlow()
 
     init {
         carregarDadosIniciais()
@@ -94,8 +99,12 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 updateState(foods, historico)
-            } catch (_: Exception) {
-                _messages.emit("Não foi possível carregar os dados salvos")
+            } catch (error: SQLiteException) {
+                reportPersistenceError("carregar dados iniciais", error)
+                emitMessage(UiMessage.Persistence("Não foi possível carregar os dados salvos"))
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("carregar dados iniciais", error)
+                emitMessage(UiMessage.Persistence("Ocorreu um erro ao carregar os dados"))
             }
         }
     }
@@ -133,7 +142,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
         val cleanName = nome.trim()
         if (cleanName.isBlank()) {
-            _messages.tryEmit("Informe o nome do preparo")
+            tryEmitMessage(UiMessage.Validation("Informe o nome do preparo"))
             return
         }
 
@@ -162,7 +171,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
                 if (!nomeDisponivel) {
                     setFoodSaveStatus(SaveStatus.ERROR)
-                    _messages.emit("Já existe um preparo com esse nome")
+                    emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
                     return@launch
                 }
 
@@ -173,10 +182,23 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
                 atualizarPreparosSalvos()
                 setFoodSaveStatus(SaveStatus.SUCCESS)
-                _messages.emit("Preparo cadastrado")
-            } catch (_: Exception) {
+                emitMessage(UiMessage.Success("Preparo cadastrado"))
+            } catch (error: SQLiteConstraintException) {
+                reportPersistenceError("cadastrar preparo com nome duplicado", error)
                 setFoodSaveStatus(SaveStatus.ERROR)
-                _messages.emit("Não foi possível cadastrar o preparo")
+                emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
+            } catch (error: SQLiteException) {
+                reportPersistenceError("cadastrar preparo", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Não foi possível cadastrar o preparo"))
+            } catch (error: IllegalArgumentException) {
+                Log.w(LOG_TAG, "Dados inválidos ao cadastrar preparo", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Validation(error.message ?: "Dados do preparo inválidos"))
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("cadastrar preparo", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Ocorreu um erro ao cadastrar o preparo"))
             }
         }
     }
@@ -195,7 +217,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
                 if (!nomeDisponivel) {
                     setFoodSaveStatus(SaveStatus.ERROR)
-                    _messages.emit("Já existe um preparo com esse nome")
+                    emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
                     return@launch
                 }
 
@@ -210,10 +232,27 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
                 atualizarPreparosSalvos()
                 setFoodSaveStatus(SaveStatus.SUCCESS)
-                _messages.emit("Preparo atualizado")
-            } catch (_: Exception) {
+                emitMessage(UiMessage.Success("Preparo atualizado"))
+            } catch (error: SQLiteConstraintException) {
+                reportPersistenceError("atualizar preparo com nome duplicado", error)
                 setFoodSaveStatus(SaveStatus.ERROR)
-                _messages.emit("Não foi possível atualizar o preparo")
+                emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
+            } catch (error: SQLiteException) {
+                reportPersistenceError("atualizar preparo", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Não foi possível atualizar o preparo"))
+            } catch (error: IllegalArgumentException) {
+                Log.w(LOG_TAG, "Dados inválidos ao atualizar preparo", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Validation(error.message ?: "Dados do preparo inválidos"))
+            } catch (error: IllegalStateException) {
+                Log.w(LOG_TAG, "Preparo não encontrado durante atualização", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.NotFound("Preparo não encontrado"))
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("atualizar preparo", error)
+                setFoodSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Ocorreu um erro ao atualizar o preparo"))
             }
         }
     }
@@ -230,23 +269,28 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 when (resultado) {
                     ExcluirPreparoUseCase.Resultado.NAO_ENCONTRADO -> {
                         setFoodDeleteStatus(SaveStatus.ERROR)
-                        _messages.emit("Preparo não encontrado")
+                        emitMessage(UiMessage.NotFound("Preparo não encontrado"))
                         return@launch
                     }
                     ExcluirPreparoUseCase.Resultado.EXCLUIDO -> {
                         atualizarPreparosSalvos()
                         setFoodDeleteStatus(SaveStatus.SUCCESS)
-                        _messages.emit("Preparo excluído")
+                        emitMessage(UiMessage.Success("Preparo excluído"))
                     }
                     ExcluirPreparoUseCase.Resultado.INATIVADO_POR_HISTORICO -> {
                         atualizarPreparosSalvos()
                         setFoodDeleteStatus(SaveStatus.SUCCESS)
-                        _messages.emit("Este preparo possui histórico e foi inativado")
+                        emitMessage(UiMessage.Success("Este preparo possui histórico e foi inativado"))
                     }
                 }
-            } catch (_: Exception) {
+            } catch (error: SQLiteException) {
+                reportPersistenceError("excluir ou inativar preparo", error)
                 setFoodDeleteStatus(SaveStatus.ERROR)
-                _messages.emit("Não foi possível excluir o preparo")
+                emitMessage(UiMessage.Persistence("Não foi possível excluir o preparo"))
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("excluir ou inativar preparo", error)
+                setFoodDeleteStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Ocorreu um erro ao excluir o preparo"))
             }
         }
     }
@@ -256,13 +300,13 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
         val current = _uiState.value
         if (quantitiesByFoodId.isEmpty()) {
-            _messages.tryEmit("Informe ao menos uma quantidade maior que zero")
+            tryEmitMessage(UiMessage.Validation("Informe ao menos uma quantidade maior que zero"))
             return
         }
         try {
             quantitiesByFoodId.values.forEach(validarDadosProducao::validarQuantidadeProduzida)
         } catch (error: IllegalArgumentException) {
-            _messages.tryEmit(error.message ?: "Quantidade produzida inválida")
+            tryEmitMessage(UiMessage.Validation(error.message ?: "Quantidade produzida inválida"))
             return
         }
 
@@ -273,7 +317,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             .toSet()
         val quantitiesToSave = quantitiesByFoodId.filterKeys(availableFoodIds::contains)
         if (quantitiesToSave.isEmpty()) {
-            _messages.tryEmit("Os preparos informados não estão mais disponíveis")
+            tryEmitMessage(UiMessage.Conflict("Os preparos informados não estão mais disponíveis"))
             return
         }
 
@@ -290,10 +334,19 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
                 updateState(_uiState.value.foods, savedHistory)
                 setProductionSaveStatus(SaveStatus.SUCCESS)
-                _messages.emit("Produção salva")
-            } catch (_: Exception) {
+                emitMessage(UiMessage.Success("Produção salva"))
+            } catch (error: SQLiteConstraintException) {
+                reportPersistenceError("salvar produção com dados conflitantes", error)
                 setProductionSaveStatus(SaveStatus.ERROR)
-                _messages.emit("Não foi possível salvar a produção")
+                emitMessage(UiMessage.Conflict("A produção possui dados conflitantes; atualize a tela e tente novamente"))
+            } catch (error: SQLiteException) {
+                reportPersistenceError("salvar produção", error)
+                setProductionSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Não foi possível salvar a produção"))
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("salvar produção", error)
+                setProductionSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Persistence("Ocorreu um erro ao salvar a produção"))
             }
         }
     }
@@ -306,7 +359,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         try {
             validarDadosProducao.validarClientesAtendidos(clientesAtendidos)
         } catch (error: IllegalArgumentException) {
-            _messages.tryEmit(error.message ?: "Quantidade de clientes inválida")
+            tryEmitMessage(UiMessage.Validation(error.message ?: "Quantidade de clientes inválida"))
             return
         }
 
@@ -315,7 +368,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             it.day.id == productionDayId && !it.fechado
         }
         if (production == null) {
-            _messages.tryEmit("A produção não foi encontrada ou já está fechada")
+            tryEmitMessage(UiMessage.Conflict("A produção não foi encontrada ou já está fechada"))
             return
         }
 
@@ -339,7 +392,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 )
             }
         } catch (error: IllegalArgumentException) {
-            _messages.tryEmit(error.message ?: "Dados do fechamento inválidos")
+            tryEmitMessage(UiMessage.Validation(error.message ?: "Dados do fechamento inválidos"))
             return
         }
         viewModelScope.launch {
@@ -353,11 +406,37 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                     producaoRepository.listarHistorico()
                 }
                 updateState(_uiState.value.foods, savedHistory)
-                _messages.emit("Fechamento salvo")
-            } catch (_: Exception) {
-                _messages.emit("Não foi possível salvar o fechamento")
+                emitMessage(UiMessage.Success("Fechamento salvo"))
+            } catch (error: SQLiteConstraintException) {
+                reportPersistenceError("salvar fechamento com dados conflitantes", error)
+                emitMessage(UiMessage.Conflict("Os dados do fechamento entram em conflito com a produção salva"))
+            } catch (error: SQLiteException) {
+                reportPersistenceError("salvar fechamento", error)
+                emitMessage(UiMessage.Persistence("Não foi possível salvar o fechamento"))
+            } catch (error: IllegalStateException) {
+                Log.w(LOG_TAG, "Produção ou item não encontrado durante fechamento", error)
+                emitMessage(UiMessage.NotFound("A produção ou um de seus itens não foi encontrado"))
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("salvar fechamento", error)
+                emitMessage(UiMessage.Persistence("Ocorreu um erro ao salvar o fechamento"))
             }
         }
+    }
+
+    private fun tryEmitMessage(message: UiMessage) {
+        _events.tryEmit(UiEvent.ShowMessage(message))
+    }
+
+    private suspend fun emitMessage(message: UiMessage) {
+        _events.emit(UiEvent.ShowMessage(message))
+    }
+
+    private fun reportPersistenceError(operation: String, error: SQLiteException) {
+        Log.e(LOG_TAG, "Falha de persistência ao $operation", error)
+    }
+
+    private fun reportUnexpectedError(operation: String, error: RuntimeException) {
+        Log.e(LOG_TAG, "Falha inesperada ao $operation", error)
     }
 
     private fun updateState(foods: List<FoodUiModel>, summaries: List<ProductionSummary>) {
@@ -416,6 +495,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             historico = historicoMapper.mapear(summaries)
         )
     )
+
+    private companion object {
+        const val LOG_TAG = "SemSobraViewModel"
+    }
 }
 
 private fun calculateAnalytics(
