@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,6 +28,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -45,9 +48,11 @@ import java.time.LocalDate
 fun FoodScreen(
     foods: List<FoodUiModel>,
     saveStatus: SaveStatus,
+    deleteStatus: SaveStatus,
     onSave: (Long, String, String, String, Int) -> Unit,
     onSaveResultConsumed: () -> Unit,
     onDelete: (FoodUiModel) -> Unit,
+    onDeleteResultConsumed: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var editingId by rememberSaveable { androidx.compose.runtime.mutableStateOf(0L) }
@@ -57,6 +62,7 @@ fun FoodScreen(
     var selectedDay by rememberSaveable {
         androidx.compose.runtime.mutableIntStateOf(LocalDate.now().dayOfWeek.value)
     }
+    var foodPendingDeletion by remember { mutableStateOf<FoodUiModel?>(null) }
 
     fun clearForm() {
         editingId = 0
@@ -70,6 +76,61 @@ fun FoodScreen(
             clearForm()
             onSaveResultConsumed()
         }
+    }
+
+    LaunchedEffect(deleteStatus) {
+        if (deleteStatus == SaveStatus.SUCCESS) {
+            foodPendingDeletion = null
+            onDeleteResultConsumed()
+        }
+    }
+
+    foodPendingDeletion?.let { food ->
+        val deleting = deleteStatus == SaveStatus.SAVING
+        AlertDialog(
+            onDismissRequest = {
+                if (!deleting) {
+                    foodPendingDeletion = null
+                    onDeleteResultConsumed()
+                }
+            },
+            title = { Text("Excluir ${food.nome}?") },
+            text = {
+                Text(
+                    "Se este preparo ainda não possui histórico, ele será excluído. " +
+                        "Caso já tenha sido usado em produções, será apenas inativado para " +
+                        "preservar os relatórios anteriores."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { onDelete(food) },
+                    enabled = !deleting
+                ) {
+                    if (deleting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+                        Text("Excluindo...")
+                    } else {
+                        Text("Excluir", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        foodPendingDeletion = null
+                        onDeleteResultConsumed()
+                    },
+                    enabled = !deleting
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 
     val foodsForSelectedDay = foods.filter { it.disponivelNoDia(selectedDay) }
@@ -190,7 +251,7 @@ fun FoodScreen(
                             selectedDay = food.diaDaSemana
                         }
                     },
-                    onDelete = { onDelete(food) }
+                    onDelete = { foodPendingDeletion = food }
                 )
             }
         }

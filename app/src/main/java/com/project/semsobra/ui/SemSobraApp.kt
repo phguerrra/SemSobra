@@ -112,9 +112,11 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
                 AppRoute.Foods -> FoodScreen(
                     foods = uiState.foods,
                     saveStatus = uiState.foodSaveStatus,
+                    deleteStatus = uiState.foodDeleteStatus,
                     onSave = viewModel::saveFood,
                     onSaveResultConsumed = viewModel::consumeFoodSaveResult,
                     onDelete = viewModel::deleteFood,
+                    onDeleteResultConsumed = viewModel::consumeFoodDeleteResult,
                     modifier = Modifier.padding(padding)
                 )
                 AppRoute.Production -> ProductionDayScreen(

@@ -43,7 +43,8 @@ data class SemSobraUiState(
     val productionSummaries: List<ProductionSummary> = emptyList(),
     val analytics: AnalyticsResult = emptyAnalytics(),
     val foodSaveStatus: SaveStatus = SaveStatus.IDLE,
-    val productionSaveStatus: SaveStatus = SaveStatus.IDLE
+    val productionSaveStatus: SaveStatus = SaveStatus.IDLE,
+    val foodDeleteStatus: SaveStatus = SaveStatus.IDLE
 )
 
 enum class SaveStatus {
@@ -216,6 +217,9 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun deleteFood(food: FoodUiModel) {
+        if (_uiState.value.foodDeleteStatus == SaveStatus.SAVING) return
+        setFoodDeleteStatus(SaveStatus.SAVING)
+
         viewModelScope.launch {
             try {
                 val resultado = withContext(Dispatchers.IO) {
@@ -223,19 +227,23 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
                 when (resultado) {
                     ExcluirPreparoUseCase.Resultado.NAO_ENCONTRADO -> {
+                        setFoodDeleteStatus(SaveStatus.ERROR)
                         _messages.emit("Preparo não encontrado")
                         return@launch
                     }
                     ExcluirPreparoUseCase.Resultado.EXCLUIDO -> {
                         atualizarPreparosSalvos()
+                        setFoodDeleteStatus(SaveStatus.SUCCESS)
                         _messages.emit("Preparo excluído")
                     }
                     ExcluirPreparoUseCase.Resultado.INATIVADO_POR_HISTORICO -> {
                         atualizarPreparosSalvos()
+                        setFoodDeleteStatus(SaveStatus.SUCCESS)
                         _messages.emit("Este preparo possui histórico e foi inativado")
                     }
                 }
             } catch (_: Exception) {
+                setFoodDeleteStatus(SaveStatus.ERROR)
                 _messages.emit("Não foi possível excluir o preparo")
             }
         }
@@ -379,12 +387,22 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun consumeFoodDeleteResult() {
+        if (_uiState.value.foodDeleteStatus != SaveStatus.SAVING) {
+            setFoodDeleteStatus(SaveStatus.IDLE)
+        }
+    }
+
     private fun setFoodSaveStatus(status: SaveStatus) {
         _uiState.value = _uiState.value.copy(foodSaveStatus = status)
     }
 
     private fun setProductionSaveStatus(status: SaveStatus) {
         _uiState.value = _uiState.value.copy(productionSaveStatus = status)
+    }
+
+    private fun setFoodDeleteStatus(status: SaveStatus) {
+        _uiState.value = _uiState.value.copy(foodDeleteStatus = status)
     }
 
     private fun calcularPrevisaoDemanda(
