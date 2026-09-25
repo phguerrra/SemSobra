@@ -22,7 +22,8 @@ import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.repository.ProducaoRepository
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
-import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
+import com.project.semsobra.domain.usecase.FecharProducaoUseCase
+import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 import com.project.semsobra.ui.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodMetric
@@ -70,9 +71,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     private val historicoMapper = HistoricoProducaoMapper()
     private val preparoRepository = PreparoLocalRepository(application)
     private val excluirPreparo = ExcluirPreparoUseCase(preparoRepository)
-    private val validarDadosProducao = ValidarDadosProducaoUseCase()
     private val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
     private val producaoRepository: ProducaoRepository = ProducaoLocalRepository(application)
+    private val salvarProducao = SalvarProducaoUseCase(producaoRepository)
+    private val fecharProducao = FecharProducaoUseCase(producaoRepository)
 
     private val _uiState = MutableStateFlow(
         SemSobraUiState(previsaoDemanda = calcularPrevisaoDemanda(emptyList()))
@@ -306,13 +308,6 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             tryEmitMessage(UiMessage.Validation("Informe ao menos uma quantidade maior que zero"))
             return
         }
-        try {
-            quantitiesByFoodId.values.forEach(validarDadosProducao::validarQuantidadeProduzida)
-        } catch (error: IllegalArgumentException) {
-            tryEmitMessage(UiMessage.Validation(error.message ?: "Quantidade produzida inválida"))
-            return
-        }
-
         val today = LocalDate.now()
         val availableFoodIds = current.foods
             .filter { it.disponivelNoDia(today.dayOfWeek.value) }
@@ -332,12 +327,14 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val savedHistory = withContext(Dispatchers.IO) {
-                    producaoRepository.salvarProducao(production, quantitiesToSave)
-                    producaoRepository.listarHistorico()
+                    salvarProducao.executar(production, quantitiesToSave)
                 }
                 updateState(_uiState.value.foods, savedHistory)
                 setProductionSaveStatus(SaveStatus.SUCCESS)
                 emitMessage(UiMessage.Success("Produção salva"))
+            } catch (error: IllegalArgumentException) {
+                setProductionSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Validation(error.message ?: "Quantidade produzida inválida"))
             } catch (error: SQLiteConstraintException) {
                 reportPersistenceError("salvar produção com dados conflitantes", error)
                 setProductionSaveStatus(SaveStatus.ERROR)
@@ -361,13 +358,6 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     ) {
         if (_uiState.value.closingSaveStatus == SaveStatus.SAVING) return
 
-        try {
-            validarDadosProducao.validarClientesAtendidos(clientesAtendidos)
-        } catch (error: IllegalArgumentException) {
-            tryEmitMessage(UiMessage.Validation(error.message ?: "Quantidade de clientes inválida"))
-            return
-        }
-
         val current = _uiState.value
         val production = current.productionSummaries.firstOrNull {
             it.day.id == productionDayId && !it.fechado
@@ -378,42 +368,33 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
 
         val closingById = closingItems.associateBy(ProductionItemUiModel::id)
-        val itemsToSave = try {
-            production.items.map { display ->
-                val closingItem = closingById[display.item.id] ?: display.item
-                validarDadosProducao.validarFechamentoDoItem(
-                    display.item.quantidadeProduzida,
-                    closingItem.quantidadeSobra,
-                    closingItem.acabouAntesDoFim,
-                    closingItem.horarioAcabou
-                )
-                closingItem.copy(
-                    producaoDiaId = productionDayId,
-                    alimentoId = display.item.alimentoId,
-                    quantidadeProduzida = display.item.quantidadeProduzida,
-                    horarioAcabou = closingItem.horarioAcabou
-                        ?.trim()
-                        ?.takeIf { closingItem.acabouAntesDoFim }
-                )
-            }
-        } catch (error: IllegalArgumentException) {
-            tryEmitMessage(UiMessage.Validation(error.message ?: "Dados do fechamento inválidos"))
-            return
+        val itemsToSave = production.items.map { display ->
+            val closingItem = closingById[display.item.id] ?: display.item
+            closingItem.copy(
+                producaoDiaId = productionDayId,
+                alimentoId = display.item.alimentoId,
+                quantidadeProduzida = display.item.quantidadeProduzida,
+                horarioAcabou = closingItem.horarioAcabou
+                    ?.trim()
+                    ?.takeIf { closingItem.acabouAntesDoFim }
+            )
         }
         setClosingSaveStatus(SaveStatus.SAVING)
         viewModelScope.launch {
             try {
                 val savedHistory = withContext(Dispatchers.IO) {
-                    producaoRepository.fecharProducao(
+                    fecharProducao.executar(
                         producaoId = productionDayId,
                         clientesAtendidos = clientesAtendidos,
                         itens = itemsToSave
                     )
-                    producaoRepository.listarHistorico()
                 }
                 updateState(_uiState.value.foods, savedHistory)
                 setClosingSaveStatus(SaveStatus.SUCCESS)
                 emitMessage(UiMessage.Success("Fechamento salvo"))
+            } catch (error: IllegalArgumentException) {
+                setClosingSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Validation(error.message ?: "Dados do fechamento inválidos"))
             } catch (error: SQLiteConstraintException) {
                 reportPersistenceError("salvar fechamento com dados conflitantes", error)
                 setClosingSaveStatus(SaveStatus.ERROR)
