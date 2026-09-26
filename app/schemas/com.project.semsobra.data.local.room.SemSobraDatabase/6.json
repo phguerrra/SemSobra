@@ -1,0 +1,242 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 6,
+    "identityHash": "8bbee03b19d5d703fb9520016956c2a5",
+    "entities": [
+      {
+        "tableName": "preparos",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nome` TEXT NOT NULL COLLATE NOCASE, `descricao` TEXT NOT NULL, `unidade_medida` TEXT NOT NULL, `dia_da_semana` INTEGER NOT NULL, `ativo` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nome",
+            "columnName": "nome",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descricao",
+            "columnName": "descricao",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unidadeMedida",
+            "columnName": "unidade_medida",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "diaDaSemana",
+            "columnName": "dia_da_semana",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ativo",
+            "columnName": "ativo",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_preparos_nome_dia_da_semana",
+            "unique": true,
+            "columnNames": [
+              "nome",
+              "dia_da_semana"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_preparos_nome_dia_da_semana` ON `${TABLE_NAME}` (`nome`, `dia_da_semana`)"
+          }
+        ]
+      },
+      {
+        "tableName": "producoes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `data` TEXT NOT NULL, `dia_da_semana` INTEGER NOT NULL, `clientes_atendidos` INTEGER NOT NULL, `turno` TEXT NOT NULL, `restaurante_aberto` INTEGER NOT NULL, `fechada` INTEGER NOT NULL, `alterado_em` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "data",
+            "columnName": "data",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "diaDaSemana",
+            "columnName": "dia_da_semana",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientesAtendidos",
+            "columnName": "clientes_atendidos",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "turno",
+            "columnName": "turno",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restauranteAberto",
+            "columnName": "restaurante_aberto",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechada",
+            "columnName": "fechada",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "alteradoEm",
+            "columnName": "alterado_em",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_producoes_data_turno",
+            "unique": true,
+            "columnNames": [
+              "data",
+              "turno"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_producoes_data_turno` ON `${TABLE_NAME}` (`data`, `turno`)"
+          }
+        ]
+      },
+      {
+        "tableName": "itens_producao",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `producao_id` INTEGER NOT NULL, `preparo_id` INTEGER NOT NULL, `quantidade_produzida` REAL NOT NULL, `quantidade_sobra` REAL NOT NULL, `acabou_antes_do_fim` INTEGER NOT NULL, `horario_acabou` TEXT, FOREIGN KEY(`producao_id`) REFERENCES `producoes`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`preparo_id`) REFERENCES `preparos`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "producaoId",
+            "columnName": "producao_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preparoId",
+            "columnName": "preparo_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantidadeProduzida",
+            "columnName": "quantidade_produzida",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quantidadeSobra",
+            "columnName": "quantidade_sobra",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "acabouAntesDoFim",
+            "columnName": "acabou_antes_do_fim",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "horarioAcabou",
+            "columnName": "horario_acabou",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_itens_producao_producao_id_preparo_id",
+            "unique": true,
+            "columnNames": [
+              "producao_id",
+              "preparo_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_itens_producao_producao_id_preparo_id` ON `${TABLE_NAME}` (`producao_id`, `preparo_id`)"
+          },
+          {
+            "name": "index_itens_producao_preparo_id",
+            "unique": false,
+            "columnNames": [
+              "preparo_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_itens_producao_preparo_id` ON `${TABLE_NAME}` (`preparo_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "producoes",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "producao_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "preparos",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "preparo_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8bbee03b19d5d703fb9520016956c2a5')"
+    ]
+  }
+}

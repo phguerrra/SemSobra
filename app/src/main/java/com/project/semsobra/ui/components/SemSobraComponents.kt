@@ -2,6 +2,7 @@ package com.project.semsobra.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,9 +83,17 @@ fun HeaderCard(title: String, value: String, subtitle: String) {
 }
 
 @Composable
-fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
+fun MetricCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onClick: (() -> Unit)? = null
+) {
     Card(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -101,6 +111,14 @@ fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.primary
             )
+            if (actionLabel != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    actionLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }
@@ -239,7 +257,11 @@ fun ForecastItemCard(item: ForecastItem, explain: Boolean = false) {
 }
 
 @Composable
-fun ProductionSummaryCard(summary: ProductionSummary, showItems: Boolean = false) {
+fun ProductionSummaryCard(
+    summary: ProductionSummary,
+    showItems: Boolean = false,
+    onEdit: (() -> Unit)? = null
+) {
     val leftoversByUnit = summary.items
         .groupBy { it.food.unidadeMedida.trim().lowercase() }
         .mapValues { (_, items) -> QuantityPolicy.sum(items.map { it.item.quantidadeSobra }) }
@@ -263,6 +285,13 @@ fun ProductionSummaryCard(summary: ProductionSummary, showItems: Boolean = false
             )
             Text("Clientes atendidos: ${if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos else "em aberto"}")
             Text("Sobra total: $leftoversByUnit")
+            summary.day.alteradoEm?.let {
+                Text(
+                    "Fechamento corrigido em ${it.replace('T', ' ')}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
             if (showItems) {
                 HorizontalDivider()
                 summary.items.forEach { item ->
@@ -276,6 +305,9 @@ fun ProductionSummaryCard(summary: ProductionSummary, showItems: Boolean = false
                         Text("Acabou antes do fim${item.item.horarioAcabou?.let { " às $it" }.orEmpty()}")
                     }
                 }
+            }
+            if (onEdit != null && summary.fechado) {
+                TextButton(onClick = onEdit) { Text("Reabrir para corrigir") }
             }
         }
     }

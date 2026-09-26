@@ -8,7 +8,8 @@ data class ProductionDayUiModel(
     val diaDaSemana: Int,
     val clientesAtendidos: Int = 0,
     val turno: Turno = Turno.ALMOCO,
-    val restauranteAberto: Boolean = true
+    val restauranteAberto: Boolean = true,
+    val alteradoEm: String? = null
 )
 
 data class ProductionItemUiModel(

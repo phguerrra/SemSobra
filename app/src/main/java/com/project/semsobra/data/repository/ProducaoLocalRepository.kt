@@ -65,6 +65,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
         require(clientesAtendidos > 0) { "Informe os clientes atendidos" }
         require(itens.isNotEmpty()) { "A produção precisa ter ao menos um item" }
 
+        val eraFechada = dao.estaFechada(producaoId) == true
         database.runInTransaction {
             check(dao.fecharProducao(producaoId, clientesAtendidos) == 1) {
                 "Produção não encontrada"
@@ -77,11 +78,17 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
                     dao.atualizarFechamentoItem(
                         itemId = item.id,
                         producaoId = producaoId,
+                        produzida = QuantityPolicy.normalize(item.quantidadeProduzida),
                         sobra = QuantityPolicy.normalize(item.quantidadeSobra),
                         acabou = item.acabouAntesDoFim,
                         horario = horario
                     ) == 1
                 ) { "Item da produção não encontrado" }
+            }
+            if (eraFechada) {
+                check(dao.registrarAlteracaoFechamento(producaoId) == 1) {
+                    "Não foi possível registrar a alteração"
+                }
             }
         }
     }
@@ -100,7 +107,8 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
                     diaDaSemana = first.producaoDiaDaSemana,
                     clientesAtendidos = first.clientesAtendidos,
                     turno = Turno.valueOf(first.turno),
-                    restauranteAberto = first.restauranteAberto
+                    restauranteAberto = first.restauranteAberto,
+                    alteradoEm = first.alteradoEm
                 ),
                 items = productionRows.map(::mapearItem),
                 fechado = first.fechada
@@ -125,7 +133,8 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
             row.nome,
             row.descricao,
             row.unidadeMedida,
-            row.preparoDiaDaSemana
+            row.preparoDiaDaSemana,
+            row.diasSemanaMask
         )
         return ProductionItemDisplay(
             item = item,
@@ -141,6 +150,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
         clientesAtendidos = clientesAtendidos,
         turno = turno.name,
         restauranteAberto = restauranteAberto,
-        fechada = false
+        fechada = false,
+        alteradoEm = alteradoEm
     )
 }

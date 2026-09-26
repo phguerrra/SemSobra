@@ -30,6 +30,9 @@ interface PreparoDao {
     @Query("UPDATE preparos SET ativo = 0 WHERE id = :id")
     fun inativar(id: Long): Int
 
+    @Query("UPDATE preparos SET dias_semana_mask = :mask WHERE id = :id")
+    fun atualizarDias(id: Long, mask: Int): Int
+
     @Query(
         "SELECT EXISTS(SELECT 1 FROM preparos " +
             "WHERE nome = :nome COLLATE NOCASE AND dia_da_semana = :dia " +
@@ -67,14 +70,21 @@ interface ProducaoDao {
     @Query("UPDATE producoes SET clientes_atendidos = :clientes, fechada = 1 WHERE id = :id")
     fun fecharProducao(id: Long, clientes: Int): Int
 
+    @Query("UPDATE producoes SET alterado_em = CURRENT_TIMESTAMP WHERE id = :id")
+    fun registrarAlteracaoFechamento(id: Long): Int
+
+    @Query("SELECT fechada FROM producoes WHERE id = :id LIMIT 1")
+    fun estaFechada(id: Long): Boolean?
+
     @Query(
-        "UPDATE itens_producao SET quantidade_sobra = :sobra, " +
+        "UPDATE itens_producao SET quantidade_produzida = :produzida, quantidade_sobra = :sobra, " +
             "acabou_antes_do_fim = :acabou, horario_acabou = :horario " +
             "WHERE id = :itemId AND producao_id = :producaoId"
     )
     fun atualizarFechamentoItem(
         itemId: Long,
         producaoId: Long,
+        produzida: Double,
         sobra: Double,
         acabou: Boolean,
         horario: String?
@@ -84,11 +94,11 @@ interface ProducaoDao {
         const val HISTORICO_QUERY = """
             SELECT p.id AS producao_id, p.data,
                 p.dia_da_semana AS producao_dia_da_semana,
-                p.clientes_atendidos, p.turno, p.restaurante_aberto, p.fechada,
+                p.clientes_atendidos, p.turno, p.restaurante_aberto, p.fechada, p.alterado_em,
                 ip.id AS item_id, ip.preparo_id, ip.quantidade_produzida,
                 ip.quantidade_sobra, ip.acabou_antes_do_fim, ip.horario_acabou,
                 pr.nome, pr.descricao, pr.unidade_medida,
-                pr.dia_da_semana AS preparo_dia_da_semana
+                pr.dia_da_semana AS preparo_dia_da_semana, pr.dias_semana_mask
             FROM producoes p
             INNER JOIN itens_producao ip ON ip.producao_id = p.id
             INNER JOIN preparos pr ON pr.id = ip.preparo_id

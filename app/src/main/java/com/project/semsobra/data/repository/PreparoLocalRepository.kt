@@ -34,6 +34,9 @@ class PreparoLocalRepository(context: Context) : PreparoRepository {
 
     override fun inativar(id: Long): Boolean = dao.inativar(id) > 0
 
+    override fun atualizarDias(id: Long, diasSemanaMask: Int): Boolean =
+        dao.atualizarDias(id, diasSemanaMask) > 0
+
     override fun existeNome(nome: String, diaDaSemana: Int, idIgnorado: Long?): Boolean =
         dao.existeNome(Preparo.normalizarNome(nome), diaDaSemana, idIgnorado)
 
@@ -44,7 +47,8 @@ class PreparoLocalRepository(context: Context) : PreparoRepository {
         nome,
         descricao,
         unidadeMedida,
-        diaDaSemana
+        diaDaSemana,
+        diasSemanaMask
     )
 
     private fun Preparo.toEntity(ativo: Boolean = true) = PreparoEntity(
@@ -53,6 +57,7 @@ class PreparoLocalRepository(context: Context) : PreparoRepository {
         descricao = descricao,
         unidadeMedida = unidadeMedida,
         diaDaSemana = diaDaSemana,
+        diasSemanaMask = diasSemanaMask,
         ativo = ativo
     )
 }

@@ -103,13 +103,27 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        "Próxima ação",
+                        when {
+                            todaySummary == null -> "ETAPA 1 DE 2 • PRODUÇÃO"
+                            !todaySummary.fechado -> "ETAPA 2 DE 2 • FECHAMENTO"
+                            else -> "OPERAÇÃO CONCLUÍDA"
+                        },
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
+                    Text(
+                        nextAction.first,
+                        style = MaterialTheme.typography.titleLarge
+                    )
                     Text(nextAction.second, style = MaterialTheme.typography.bodyMedium)
                     Button(onClick = nextAction.third, modifier = Modifier.fillMaxWidth()) {
-                        Text(nextAction.first)
+                        Text(
+                            when {
+                                todaySummary == null -> "Começar produção"
+                                !todaySummary.fechado -> "Continuar para fechamento"
+                                else -> "Abrir análise"
+                            }
+                        )
                     }
                 }
             }
@@ -118,7 +132,7 @@ fun HomeScreen(
         if (analytics.forecast.items.isEmpty()) {
             item { EmptyState("Cadastre preparos e registre fechamentos para gerar previsões.") }
         } else {
-            items(analytics.forecast.items.take(6), key = { it.food.id }) { item ->
+            items(analytics.forecast.items.take(6), key = { "forecast-${it.food.id}" }) { item ->
                 ForecastItemCard(item)
             }
         }
@@ -139,7 +153,7 @@ fun HomeScreen(
         if (summaries.isEmpty()) {
             item { EmptyState("Nenhuma produção registrada ainda.") }
         } else {
-            items(summaries.take(3), key = { it.day.id }) { summary ->
+            items(summaries.take(3), key = { "summary-${it.day.id}" }) { summary ->
                 ProductionSummaryCard(summary)
             }
         }

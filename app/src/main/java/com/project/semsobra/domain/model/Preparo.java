@@ -11,12 +11,19 @@ public final class Preparo {
     private final String descricao;
     private final String unidadeMedida;
     private final int diaDaSemana;
+    private final int diasSemanaMask;
 
     public Preparo(String nome, String descricao, String unidadeMedida, int diaDaSemana) {
         this(0, nome, descricao, unidadeMedida, diaDaSemana);
     }
 
     public Preparo(long id, String nome, String descricao, String unidadeMedida, int diaDaSemana) {
+        this(id, nome, descricao, unidadeMedida, diaDaSemana,
+                diaDaSemana == TODOS_OS_DIAS ? 0 : 1 << (diaDaSemana - 1));
+    }
+
+    public Preparo(long id, String nome, String descricao, String unidadeMedida,
+                   int diaDaSemana, int diasSemanaMask) {
         if (nome == null || nome.isBlank()) {
             throw new IllegalArgumentException("O nome do preparo é obrigatório");
         }
@@ -31,6 +38,7 @@ public final class Preparo {
                 ? "kg"
                 : unidadeMedida.trim();
         this.diaDaSemana = diaDaSemana;
+        this.diasSemanaMask = diasSemanaMask;
     }
 
     public long getId() {
@@ -51,6 +59,10 @@ public final class Preparo {
 
     public int getDiaDaSemana() {
         return diaDaSemana;
+    }
+
+    public int getDiasSemanaMask() {
+        return diasSemanaMask;
     }
 
     public static String normalizarNome(String nome) {

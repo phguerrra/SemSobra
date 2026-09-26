@@ -16,6 +16,7 @@ data class PreparoEntity(
     val descricao: String = "",
     @ColumnInfo(name = "unidade_medida") val unidadeMedida: String,
     @ColumnInfo(name = "dia_da_semana") val diaDaSemana: Int,
+    @ColumnInfo(name = "dias_semana_mask") val diasSemanaMask: Int = 0,
     val ativo: Boolean = true
 )
 
@@ -30,7 +31,8 @@ data class ProducaoEntity(
     @ColumnInfo(name = "clientes_atendidos") val clientesAtendidos: Int = 0,
     val turno: String,
     @ColumnInfo(name = "restaurante_aberto") val restauranteAberto: Boolean = true,
-    val fechada: Boolean = false
+    val fechada: Boolean = false,
+    @ColumnInfo(name = "alterado_em") val alteradoEm: String? = null
 )
 
 @Entity(
@@ -72,6 +74,7 @@ data class HistoricoRow(
     val turno: String,
     @ColumnInfo(name = "restaurante_aberto") val restauranteAberto: Boolean,
     val fechada: Boolean,
+    @ColumnInfo(name = "alterado_em") val alteradoEm: String?,
     @ColumnInfo(name = "item_id") val itemId: Long,
     @ColumnInfo(name = "preparo_id") val preparoId: Long,
     @ColumnInfo(name = "quantidade_produzida") val quantidadeProduzida: Double,
@@ -81,5 +84,6 @@ data class HistoricoRow(
     val nome: String,
     val descricao: String,
     @ColumnInfo(name = "unidade_medida") val unidadeMedida: String,
-    @ColumnInfo(name = "preparo_dia_da_semana") val preparoDiaDaSemana: Int
+    @ColumnInfo(name = "preparo_dia_da_semana") val preparoDiaDaSemana: Int,
+    @ColumnInfo(name = "dias_semana_mask") val diasSemanaMask: Int
 )

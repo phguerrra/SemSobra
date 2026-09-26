@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +21,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +55,7 @@ fun FoodScreen(
     onSaveResultConsumed: () -> Unit,
     onDelete: (FoodUiModel) -> Unit,
     onDeleteResultConsumed: () -> Unit,
+    onToggleDay: (FoodUiModel, Int, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var editingId by rememberSaveable { androidx.compose.runtime.mutableStateOf(0L) }
@@ -63,6 +66,8 @@ fun FoodScreen(
         androidx.compose.runtime.mutableIntStateOf(LocalDate.now().dayOfWeek.value)
     }
     var foodPendingDeletion by remember { mutableStateOf<FoodUiModel?>(null) }
+    var section by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
+    val foodRows = remember(foods) { foods.chunked(2) }
 
     fun clearForm() {
         editingId = 0
@@ -133,22 +138,34 @@ fun FoodScreen(
         )
     }
 
-    val foodsForSelectedDay = foods.filter { it.disponivelNoDia(selectedDay) }
-
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = section == 0,
+                    onClick = { section = 0 },
+                    label = { Text("Todos os itens") }
+                )
+                FilterChip(
+                    selected = section == 1,
+                    onClick = { section = 1; clearForm() },
+                    label = { Text("Cardápio por dia") }
+                )
+            }
+        }
+        if (section == 1) item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Escolha o dia do cardápio",
+                    "Monte o cardápio do dia",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Os preparos e ingredientes cadastrados serão exibidos somente no dia escolhido.",
+                    "Escolha o dia e marque os itens que serão preparados.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -168,15 +185,15 @@ fun FoodScreen(
                 }
             }
         }
-        item {
+        if (section == 0) item {
             FormCard {
                 Text(
-                    "Cadastro para ${dayName(selectedDay)}",
+                    if (editingId == 0L) "Cadastrar item" else "Editar item",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Registre o prato servido nesse dia e os ingredientes que entram no preparo.",
+                    "Cadastre uma vez. Depois escolha em quais dias ele entra no cardápio.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -208,7 +225,7 @@ fun FoodScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            onSave(editingId, nome, descricao, unidade, selectedDay)
+                            onSave(editingId, nome, descricao, unidade, FoodUiModel.TODOS_OS_DIAS)
                         },
                         enabled = nome.isNotBlank() && saveStatus != SaveStatus.SAVING
                     ) {
@@ -235,32 +252,67 @@ fun FoodScreen(
                 }
             }
         }
-        item { SectionTitle("Cardápio de ${dayName(selectedDay)}") }
-        if (foodsForSelectedDay.isEmpty()) {
-            item { EmptyState("Nenhum preparo cadastrado para ${dayName(selectedDay)}.") }
+        item {
+            SectionTitle(
+                if (section == 0) "Itens cadastrados"
+                else "Itens de ${dayName(selectedDay)}"
+            )
+        }
+        if (foods.isEmpty()) {
+            item { EmptyState("Cadastre o primeiro item em Todos os itens.") }
+        } else if (section == 0) {
+            items(
+                items = foodRows,
+                key = { row -> row.joinToString("-") { it.id.toString() } }
+            ) { rowFoods ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowFoods.forEach { food ->
+                    FoodCard(
+                        food = food,
+                            modifier = Modifier.weight(1f),
+                        onEdit = {
+                            editingId = food.id
+                            nome = food.nome
+                            descricao = food.descricao
+                            unidade = food.unidadeMedida
+                        },
+                        onDelete = { foodPendingDeletion = food }
+                    )
+                    }
+                    if (rowFoods.size == 1) {
+                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
         } else {
-            items(foodsForSelectedDay, key = { it.id }) { food ->
-                FoodCard(
-                    food = food,
-                    onEdit = {
-                        editingId = food.id
-                        nome = food.nome
-                        descricao = food.descricao
-                        unidade = food.unidadeMedida
-                        if (food.diaDaSemana in 1..7) {
-                            selectedDay = food.diaDaSemana
-                        }
-                    },
-                    onDelete = { foodPendingDeletion = food }
-                )
+            items(foods, key = { it.id }) { food ->
+                    DayFoodSelector(
+                        food = food,
+                        selected = food.disponivelNoDia(selectedDay),
+                        onSelectedChange = { onToggleDay(food, selectedDay, it) }
+                    )
             }
         }
     }
 }
 
 @Composable
-private fun FoodCard(food: FoodUiModel, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun FoodCard(
+    food: FoodUiModel,
+    modifier: Modifier = Modifier,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val ingredients = food.descricao
+        .split(',', ';', '\n')
+        .map(String::trim)
+        .filter(String::isNotBlank)
+
     Card(
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -271,18 +323,42 @@ private fun FoodCard(food: FoodUiModel, onEdit: () -> Unit, onDelete: () -> Unit
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(food.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (ingredients.isEmpty()) {
+                Text(
+                    "Sem ingredientes cadastrados.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "Ingredientes",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    ingredients.forEach { ingredient ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = ingredient,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            Text("Unidade de controle: ${food.unidadeMedida}", style = MaterialTheme.typography.labelLarge)
+            val selectedDays = (1..7).filter(food::disponivelNoDia)
             Text(
-                food.descricao.ifBlank { "Sem descrição cadastrada." },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text("Controle em ${food.unidadeMedida}", style = MaterialTheme.typography.labelLarge)
-            Text(
-                if (food.diaDaSemana == FoodUiModel.TODOS_OS_DIAS) {
-                    "Programado para todos os dias"
-                } else {
-                    "Programado para ${dayName(food.diaDaSemana)}"
-                },
+                if (selectedDays.isEmpty()) "Ainda não está em nenhum cardápio"
+                else selectedDays.joinToString(" • ", transform = ::dayShortName),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -290,6 +366,41 @@ private fun FoodCard(food: FoodUiModel, onEdit: () -> Unit, onDelete: () -> Unit
                 TextButton(onClick = onEdit) { Text("Editar") }
                 TextButton(onClick = onDelete) { Text("Excluir") }
             }
+        }
+    }
+}
+
+@Composable
+private fun DayFoodSelector(
+    food: FoodUiModel,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit
+) {
+    Card(
+        onClick = { onSelectedChange(!selected) },
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+            else MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(food.nome, fontWeight = FontWeight.Bold)
+                Text(
+                    if (selected) "Incluído neste dia" else "Toque para incluir",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            FilterChip(
+                selected = selected,
+                onClick = { onSelectedChange(!selected) },
+                label = { Text(if (selected) "Selecionado" else "Selecionar") }
+            )
         }
     }
 }

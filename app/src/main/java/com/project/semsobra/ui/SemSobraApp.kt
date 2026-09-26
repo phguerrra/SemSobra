@@ -1,5 +1,13 @@
 package com.project.semsobra.ui
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -59,7 +67,9 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val today = LocalDate.now()
-    val foodsToday = uiState.foods.filter { it.disponivelNoDia(today.dayOfWeek.value) }
+    val foodsToday = remember(uiState.foods, today) {
+        uiState.foods.filter { it.disponivelNoDia(today.dayOfWeek.value) }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -110,10 +120,12 @@ fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
                 SemSobraBottomBar(
                     currentRoute = currentRoute,
                     onRouteSelected = { route ->
-                        navController.navigate(route.route) {
-                            popUpTo(AppRoute.Home.route) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                        if (route != currentRoute) {
+                            navController.navigate(route.route) {
+                                popUpTo(AppRoute.Home.route) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
                 )
@@ -150,7 +162,14 @@ private fun AppNavigation(
     foodsToday: List<com.project.semsobra.ui.model.FoodUiModel>,
     viewModel: SemSobraViewModel
 ) {
-    NavHost(navController = navController, startDestination = AppRoute.Home.route) {
+    NavHost(
+        navController = navController,
+        startDestination = AppRoute.Home.route,
+        enterTransition = { smoothEnterTransition() },
+        exitTransition = { smoothExitTransition() },
+        popEnterTransition = { smoothEnterTransition(fromEnd = false) },
+        popExitTransition = { smoothExitTransition(toStart = false) }
+    ) {
         composable(AppRoute.Home.route) {
             HomeScreen(
                 analytics = uiState.analytics,
@@ -169,27 +188,42 @@ private fun AppNavigation(
                 onSave = viewModel::saveFood,
                 onSaveResultConsumed = viewModel::consumeFoodSaveResult,
                 onDelete = viewModel::deleteFood,
-                onDeleteResultConsumed = viewModel::consumeFoodDeleteResult
+                onDeleteResultConsumed = viewModel::consumeFoodDeleteResult,
+                onToggleDay = viewModel::toggleFoodDay
             )
         }
         composable(AppRoute.Production.route) {
-            ProductionDayScreen(
-                foods = foodsToday,
-                saveStatus = uiState.productionSaveStatus,
-                onSave = viewModel::saveProductionToday,
-                onGoHome = {
-                    viewModel.consumeProductionSaveResult()
-                    navController.navigate(AppRoute.Home.route) {
-                        popUpTo(AppRoute.Home.route) { inclusive = true }
-                    }
-                },
-                onGoToClosing = {
-                    viewModel.consumeProductionSaveResult()
-                    navController.navigate(AppRoute.Closing.route) {
-                        popUpTo(AppRoute.Home.route)
+            val todaySummary = uiState.productionSummaries.firstOrNull {
+                it.day.data == LocalDate.now().toString()
+            }
+            if (todaySummary != null && uiState.productionSaveStatus != SaveStatus.SUCCESS) {
+                LaunchedEffect(todaySummary.day.id, todaySummary.fechado) {
+                    navController.navigate(
+                        if (todaySummary.fechado) AppRoute.Analysis.route else AppRoute.Closing.route
+                    ) {
+                        popUpTo(AppRoute.Production.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
-            )
+            } else {
+                ProductionDayScreen(
+                    foods = foodsToday,
+                    saveStatus = uiState.productionSaveStatus,
+                    onSave = viewModel::saveProductionToday,
+                    onGoHome = {
+                        viewModel.consumeProductionSaveResult()
+                        navController.navigate(AppRoute.Home.route) {
+                            popUpTo(AppRoute.Home.route) { inclusive = true }
+                        }
+                    },
+                    onGoToClosing = {
+                        viewModel.consumeProductionSaveResult()
+                        navController.navigate(AppRoute.Closing.route) {
+                            popUpTo(AppRoute.Home.route)
+                        }
+                    }
+                )
+            }
         }
         composable(AppRoute.Closing.route) {
             ClosingScreen(
@@ -202,11 +236,27 @@ private fun AppNavigation(
             AnalysisScreen(
                 analytics = uiState.analytics,
                 previsaoDemanda = uiState.previsaoDemanda,
-                summaries = uiState.productionSummaries
+                summaries = uiState.productionSummaries,
+                saveStatus = uiState.closingSaveStatus,
+                onSaveHistory = viewModel::closeProduction
             )
         }
     }
 }
+
+private fun smoothEnterTransition(fromEnd: Boolean = true): EnterTransition =
+    fadeIn(animationSpec = tween(durationMillis = 140)) +
+        slideInHorizontally(
+            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+            initialOffsetX = { width -> if (fromEnd) width / 16 else -width / 16 }
+        )
+
+private fun smoothExitTransition(toStart: Boolean = true): ExitTransition =
+    fadeOut(animationSpec = tween(durationMillis = 110)) +
+        slideOutHorizontally(
+            animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+            targetOffsetX = { width -> if (toStart) -width / 20 else width / 20 }
+        )
 
 @Composable
 private fun InitialLoadingState() {

@@ -29,7 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -54,7 +58,7 @@ fun ProductionDayScreen(
     onGoToClosing: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val quantities = remember { mutableStateMapOf<Long, String>() }
+    var quantities by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
     val errors = remember { mutableStateMapOf<Long, String>() }
     val validator = remember { ValidarDadosProducaoUseCase() }
     val today = LocalDate.now()
@@ -94,7 +98,7 @@ fun ProductionDayScreen(
                     value = quantities[food.id].orEmpty(),
                     error = errors[food.id],
                     onValueChange = {
-                        quantities[food.id] = it
+                        quantities = quantities + (food.id to it)
                         errors.remove(food.id)
                     }
                 )

@@ -215,6 +215,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         unidadeMedida: String,
         diaDaSemana: Int
     ) {
+        val currentMask = _uiState.value.foods.firstOrNull { it.id == id }?.diasSemanaMask ?: 0
         viewModelScope.launch {
             try {
                 val nomeDisponivel = withContext(Dispatchers.IO) {
@@ -228,7 +229,7 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
 
                 val atualizado = withContext(Dispatchers.IO) {
                     preparoRepository.atualizar(
-                        Preparo(id, nome, descricao, unidadeMedida, diaDaSemana)
+                        Preparo(id, nome, descricao, unidadeMedida, diaDaSemana, currentMask)
                     )
                 }
                 if (!atualizado) {
@@ -300,6 +301,42 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun toggleFoodDay(food: FoodUiModel, day: Int, selected: Boolean) {
+        if (day !in 1..7) return
+        val bit = 1 shl (day - 1)
+        val newMask = if (selected) food.diasSemanaMask or bit else food.diasSemanaMask and bit.inv()
+        viewModelScope.launch {
+            try {
+                val updated = withContext(Dispatchers.IO) {
+                    preparoRepository.atualizarDias(food.id, newMask)
+                }
+                if (!updated) {
+                    emitMessage(UiMessage.NotFound("Preparo não encontrado"))
+                    return@launch
+                }
+                val current = _uiState.value
+                val updatedFoods = current.foods.map { savedFood ->
+                    if (savedFood.id == food.id) savedFood.copy(diasSemanaMask = newMask)
+                    else savedFood
+                }
+                if (day == current.previsaoDemanda.dataPrevisao.dayOfWeek.value) {
+                    updateState(updatedFoods, current.productionSummaries)
+                } else {
+                    _uiState.value = current.copy(foods = updatedFoods)
+                }
+                emitMessage(
+                    UiMessage.Success(
+                        if (selected) "${food.nome} adicionado ao cardápio"
+                        else "${food.nome} removido do cardápio"
+                    )
+                )
+            } catch (error: RuntimeException) {
+                reportUnexpectedError("atualizar cardápio do dia", error)
+                emitMessage(UiMessage.Persistence("Não foi possível atualizar o cardápio"))
+            }
+        }
+    }
+
     fun saveProductionToday(quantitiesByFoodId: Map<Long, Double>) {
         if (_uiState.value.productionSaveStatus == SaveStatus.SAVING) return
 
@@ -359,13 +396,12 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         if (_uiState.value.closingSaveStatus == SaveStatus.SAVING) return
 
         val current = _uiState.value
-        val production = current.productionSummaries.firstOrNull {
-            it.day.id == productionDayId && !it.fechado
-        }
+        val production = current.productionSummaries.firstOrNull { it.day.id == productionDayId }
         if (production == null) {
-            tryEmitMessage(UiMessage.Conflict("A produção não foi encontrada ou já está fechada"))
+            tryEmitMessage(UiMessage.Conflict("A produção não foi encontrada"))
             return
         }
+        val editingHistory = production.fechado
 
         val closingById = closingItems.associateBy(ProductionItemUiModel::id)
         val itemsToSave = production.items.map { display ->
@@ -391,7 +427,11 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
                 }
                 updateState(_uiState.value.foods, savedHistory)
                 setClosingSaveStatus(SaveStatus.SUCCESS)
-                emitMessage(UiMessage.Success("Fechamento salvo"))
+                emitMessage(
+                    UiMessage.Success(
+                        if (editingHistory) "Histórico atualizado" else "Fechamento salvo"
+                    )
+                )
             } catch (error: IllegalArgumentException) {
                 setClosingSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Validation(error.message ?: "Dados do fechamento inválidos"))
@@ -431,20 +471,26 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
         Log.e(LOG_TAG, "Falha inesperada ao $operation", error)
     }
 
-    private fun updateState(foods: List<FoodUiModel>, summaries: List<ProductionSummary>) {
-        val previsaoDemanda = calcularPrevisaoDemanda(summaries)
-        val foodsNaDataPrevista = foods.filter {
-            it.disponivelNoDia(previsaoDemanda.dataPrevisao.dayOfWeek.value)
+    private suspend fun updateState(foods: List<FoodUiModel>, summaries: List<ProductionSummary>) {
+        val derivedState = withContext(Dispatchers.Default) {
+            val previsaoDemanda = calcularPrevisaoDemanda(summaries)
+            val foodsNaDataPrevista = foods.filter {
+                it.disponivelNoDia(previsaoDemanda.dataPrevisao.dayOfWeek.value)
+            }
+            DerivedState(
+                previsaoDemanda = previsaoDemanda,
+                analytics = calculateAnalytics(
+                    foods = foodsNaDataPrevista,
+                    summaries = summaries,
+                    forecastCustomers = previsaoDemanda.clientesPrevistos
+                )
+            )
         }
         _uiState.value = _uiState.value.copy(
-            previsaoDemanda = previsaoDemanda,
+            previsaoDemanda = derivedState.previsaoDemanda,
             foods = foods,
             productionSummaries = summaries,
-            analytics = calculateAnalytics(
-                foods = foodsNaDataPrevista,
-                summaries = summaries,
-                forecastCustomers = previsaoDemanda.clientesPrevistos
-            )
+            analytics = derivedState.analytics
         )
     }
 
@@ -503,15 +549,17 @@ private fun calculateAnalytics(
     forecastCustomers: Int
 ): AnalyticsResult {
     val closed = summaries.filter { it.fechado && it.day.clientesAtendidos > 0 }
+    val historyByFoodId = closed
+        .flatMap { summary ->
+            summary.items.map { item -> Triple(item.food.id, summary.day.clientesAtendidos, item) }
+        }
+        .groupBy(keySelector = { it.first }, valueTransform = { it.second to it.third })
 
     val forecastItems = if (forecastCustomers == 0) {
         emptyList()
     } else {
         foods.mapNotNull { food ->
-            val history = closed.mapNotNull { summary ->
-                summary.items.firstOrNull { it.food.id == food.id }
-                    ?.let { summary.day.clientesAtendidos to it }
-            }
+            val history = historyByFoodId[food.id].orEmpty()
             val customerTotal = history.sumOf { it.first }
             if (customerTotal == 0) return@mapNotNull null
             val averagePerCustomer = history.sumOf { it.second.consumo } / customerTotal
@@ -586,6 +634,11 @@ private fun calculateAnalytics(
     )
 }
 
+private data class DerivedState(
+    val previsaoDemanda: ResultadoPrevisao,
+    val analytics: AnalyticsResult
+)
+
 private fun emptyAnalytics() = AnalyticsResult(
     forecast = ForecastResult(
         clientesPrevistos = 0,
@@ -604,7 +657,8 @@ private fun Preparo.toFoodUiModel() = FoodUiModel(
     nome = nome,
     descricao = descricao,
     unidadeMedida = unidadeMedida,
-    diaDaSemana = diaDaSemana
+    diaDaSemana = diaDaSemana,
+    diasSemanaMask = diasSemanaMask
 )
 
 private fun FoodUiModel.toPreparo() = Preparo(
@@ -612,5 +666,6 @@ private fun FoodUiModel.toPreparo() = Preparo(
     nome,
     descricao,
     unidadeMedida,
-    diaDaSemana
+    diaDaSemana,
+    diasSemanaMask
 )

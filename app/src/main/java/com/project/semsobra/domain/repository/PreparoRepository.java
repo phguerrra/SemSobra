@@ -19,6 +19,10 @@ public interface PreparoRepository {
 
     boolean inativar(long id);
 
+    default boolean atualizarDias(long id, int diasSemanaMask) {
+        return false;
+    }
+
     boolean existeNome(String nome, int diaDaSemana, Long idIgnorado);
 
     boolean estaEmUsoNoHistorico(long id);

@@ -62,9 +62,10 @@ fun ClosingScreen(
         ?: summaries.firstOrNull { !it.fechado }
         ?: summaries.firstOrNull()
     var clientes by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
-    val leftovers = remember { mutableStateMapOf<Long, String>() }
-    val ranOut = remember { mutableStateMapOf<Long, Boolean>() }
-    val ranOutTime = remember { mutableStateMapOf<Long, String>() }
+    var leftovers by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    var ranOut by rememberSaveable { mutableStateOf<Map<Long, Boolean>>(emptyMap()) }
+    var ranOutTime by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    var loadedSelectionId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clientesErro by remember { mutableStateOf<String?>(null) }
     val leftoverErrors = remember { mutableStateMapOf<Long, String>() }
     val timeErrors = remember { mutableStateMapOf<Long, String>() }
@@ -73,21 +74,23 @@ fun ClosingScreen(
     LaunchedEffect(selected?.day?.id) {
         selected?.let { summary ->
             selectedId = summary.day.id
+            if (loadedSelectionId == summary.day.id) return@let
+            loadedSelectionId = summary.day.id
             clientes = if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos.toString() else ""
-            leftovers.clear()
-            ranOut.clear()
-            ranOutTime.clear()
+            leftovers = emptyMap()
+            ranOut = emptyMap()
+            ranOutTime = emptyMap()
             clientesErro = null
             leftoverErrors.clear()
             timeErrors.clear()
             summary.items.forEach { display ->
-                leftovers[display.item.id] = if (display.item.quantidadeSobra > 0) {
+                leftovers = leftovers + (display.item.id to if (display.item.quantidadeSobra > 0) {
                     formatInput(display.item.quantidadeSobra)
                 } else {
                     "0"
-                }
-                ranOut[display.item.id] = display.item.acabouAntesDoFim
-                ranOutTime[display.item.id] = display.item.horarioAcabou.orEmpty()
+                })
+                ranOut = ranOut + (display.item.id to display.item.acabouAntesDoFim)
+                ranOutTime = ranOutTime + (display.item.id to display.item.horarioAcabou.orEmpty())
             }
         }
     }
@@ -108,7 +111,7 @@ fun ClosingScreen(
                 )
             }
             item { SectionTitle("Produção selecionada") }
-            items(summaries, key = { it.day.id }) { summary ->
+            items(summaries, key = { "production-${it.day.id}" }) { summary ->
                 ProductionSelectorCard(
                     summary = summary,
                     selected = summary.day.id == selected?.day?.id,
@@ -131,7 +134,7 @@ fun ClosingScreen(
                 )
             }
             selected?.items?.forEach { display ->
-                item(key = display.item.id) {
+                item(key = "closing-item-${display.item.id}") {
                     ClosingItemCard(
                         display = display,
                         leftover = leftovers[display.item.id].orEmpty(),
@@ -140,18 +143,18 @@ fun ClosingScreen(
                         leftoverError = leftoverErrors[display.item.id],
                         timeError = timeErrors[display.item.id],
                         onLeftoverChange = {
-                            leftovers[display.item.id] = it
+                            leftovers = leftovers + (display.item.id to it)
                             leftoverErrors.remove(display.item.id)
                         },
                         onRanOutChange = {
-                            ranOut[display.item.id] = it
+                            ranOut = ranOut + (display.item.id to it)
                             if (!it) {
-                                ranOutTime[display.item.id] = ""
+                                ranOutTime = ranOutTime + (display.item.id to "")
                                 timeErrors.remove(display.item.id)
                             }
                         },
                         onTimeChange = {
-                            ranOutTime[display.item.id] = it
+                            ranOutTime = ranOutTime + (display.item.id to it)
                             timeErrors.remove(display.item.id)
                         }
                     )

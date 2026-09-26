@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [PreparoEntity::class, ProducaoEntity::class, ItemProducaoEntity::class],
-    version = 5,
+    version = 7,
     exportSchema = true
 )
 abstract class SemSobraDatabase : RoomDatabase() {
@@ -28,7 +28,7 @@ abstract class SemSobraDatabase : RoomDatabase() {
                 SemSobraDatabase::class.java,
                 DATABASE_NAME
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
                 .also { instance = it }
         }
@@ -90,6 +90,25 @@ abstract class SemSobraDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE producoes_room_new RENAME TO producoes")
                 database.execSQL("ALTER TABLE itens_producao_room_new RENAME TO itens_producao")
                 criarIndices(database)
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE producoes ADD COLUMN alterado_em TEXT")
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE preparos ADD COLUMN dias_semana_mask INTEGER NOT NULL DEFAULT 0"
+                )
+                database.execSQL(
+                    "UPDATE preparos SET dias_semana_mask = " +
+                        "CASE WHEN dia_da_semana BETWEEN 1 AND 7 " +
+                        "THEN (1 << (dia_da_semana - 1)) ELSE 127 END"
+                )
             }
         }
 
