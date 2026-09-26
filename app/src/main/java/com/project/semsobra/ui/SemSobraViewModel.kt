@@ -19,11 +19,11 @@ import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.repository.PreparoRepository
 import com.project.semsobra.domain.repository.ProducaoRepository
+import com.project.semsobra.domain.usecase.AtualizarPreparoUseCase
 import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
-import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.model.UiEvent
@@ -62,9 +62,9 @@ enum class SaveStatus {
 class SemSobraViewModel(
     private val preparoRepository: PreparoRepository,
     private val producaoRepository: ProducaoRepository,
+    private val atualizarPreparoUseCase: AtualizarPreparoUseCase,
     private val cadastrarPreparo: CadastrarPreparoUseCase,
     private val excluirPreparo: ExcluirPreparoUseCase,
-    private val validarNomePreparo: ValidarNomePreparoUseCase,
     private val salvarProducao: SalvarProducaoUseCase,
     private val fecharProducao: FecharProducaoUseCase,
     private val motorPrevisao: MotorPrevisao,
@@ -206,25 +206,23 @@ class SemSobraViewModel(
         unidadeMedida: String,
         diaDaSemana: Int
     ) {
-        val currentMask = _uiState.value.foods.firstOrNull { it.id == id }?.diasSemanaMask ?: 0
         viewModelScope.launch {
             try {
-                val nomeDisponivel = withContext(Dispatchers.IO) {
-                    validarNomePreparo.estaDisponivel(nome, diaDaSemana, id)
+                val resultado = withContext(Dispatchers.IO) {
+                    atualizarPreparoUseCase.executar(id, nome, descricao, unidadeMedida, diaDaSemana)
                 }
-                if (!nomeDisponivel) {
-                    setFoodSaveStatus(SaveStatus.ERROR)
-                    emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
-                    return@launch
-                }
-
-                val atualizado = withContext(Dispatchers.IO) {
-                    preparoRepository.atualizar(
-                        Preparo(id, nome, descricao, unidadeMedida, diaDaSemana, currentMask)
-                    )
-                }
-                if (!atualizado) {
-                    throw IllegalStateException("Preparo não encontrado")
+                when (resultado) {
+                    AtualizarPreparoUseCase.Resultado.NOME_DUPLICADO -> {
+                        setFoodSaveStatus(SaveStatus.ERROR)
+                        emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
+                        return@launch
+                    }
+                    AtualizarPreparoUseCase.Resultado.NAO_ENCONTRADO -> {
+                        setFoodSaveStatus(SaveStatus.ERROR)
+                        emitMessage(UiMessage.NotFound("Preparo não encontrado"))
+                        return@launch
+                    }
+                    AtualizarPreparoUseCase.Resultado.ATUALIZADO -> Unit
                 }
 
                 atualizarPreparosSalvos()
