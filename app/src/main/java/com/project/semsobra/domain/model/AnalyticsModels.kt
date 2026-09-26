@@ -1,7 +1,7 @@
-package com.project.semsobra.ui.model
+package com.project.semsobra.domain.model
 
 data class ForecastItem(
-    val food: FoodUiModel,
+    val food: Preparo,
     val quantidadeRecomendada: Double,
     val consumoMedioPorCliente: Double,
     val ajusteSegurancaAplicado: Boolean
@@ -14,7 +14,7 @@ data class ForecastResult(
 )
 
 data class FoodMetric(
-    val food: FoodUiModel,
+    val food: Preparo,
     val quantidade: Double
 )
 
@@ -32,4 +32,19 @@ data class ReportSummary(
 data class AnalyticsResult(
     val forecast: ForecastResult,
     val report: ReportSummary
-)
+) {
+    companion object {
+        fun vazio() = AnalyticsResult(
+            forecast = ForecastResult(
+                clientesPrevistos = 0,
+                items = emptyList(),
+                alerts = emptyList()
+            ),
+            report = ReportSummary(
+                totalSobrasPorUnidade = emptyList(),
+                alimentosComMaisSobra = emptyList(),
+                alimentosQueMaisAcabaram = emptyList()
+            )
+        )
+    }
+}

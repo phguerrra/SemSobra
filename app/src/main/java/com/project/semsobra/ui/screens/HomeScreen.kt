@@ -24,7 +24,7 @@ import com.project.semsobra.ui.components.MetricCard
 import com.project.semsobra.ui.components.OperationStepCard
 import com.project.semsobra.ui.components.ProductionSummaryCard
 import com.project.semsobra.ui.components.SectionTitle
-import com.project.semsobra.ui.model.AnalyticsResult
+import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.dayName

@@ -9,12 +9,13 @@ import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
 import com.project.semsobra.data.repository.ProducaoLocalRepository
+import com.project.semsobra.domain.analytics.CalculadoraAnalytics
+import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProductionDayUiModel
 import com.project.semsobra.domain.model.ProductionItemDisplay
 import com.project.semsobra.domain.model.ProductionItemUiModel
 import com.project.semsobra.domain.model.ProductionSummary
-import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
@@ -25,14 +26,8 @@ import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
-import com.project.semsobra.ui.model.AnalyticsResult
-import com.project.semsobra.ui.model.FoodMetric
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.disponivelNoDia
-import com.project.semsobra.ui.model.ForecastItem
-import com.project.semsobra.ui.model.ForecastResult
-import com.project.semsobra.ui.model.QuantityByUnit
-import com.project.semsobra.ui.model.ReportSummary
 import com.project.semsobra.ui.model.UiEvent
 import com.project.semsobra.ui.model.UiMessage
 import java.time.LocalDate
@@ -52,7 +47,7 @@ data class SemSobraUiState(
     val loadError: String? = null,
     val foods: List<FoodUiModel> = emptyList(),
     val productionSummaries: List<ProductionSummary> = emptyList(),
-    val analytics: AnalyticsResult = emptyAnalytics(),
+    val analytics: AnalyticsResult = AnalyticsResult.vazio(),
     val foodSaveStatus: SaveStatus = SaveStatus.IDLE,
     val productionSaveStatus: SaveStatus = SaveStatus.IDLE,
     val foodDeleteStatus: SaveStatus = SaveStatus.IDLE,
@@ -68,6 +63,7 @@ enum class SaveStatus {
 
 class SemSobraViewModel(application: Application) : AndroidViewModel(application) {
     private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
+    private val calculadoraAnalytics = CalculadoraAnalytics()
     private val historicoMapper = HistoricoProducaoMapper()
     private val preparoRepository = PreparoLocalRepository(application)
     private val excluirPreparo = ExcluirPreparoUseCase(preparoRepository)
@@ -479,10 +475,10 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
             }
             DerivedState(
                 previsaoDemanda = previsaoDemanda,
-                analytics = calculateAnalytics(
-                    foods = foodsNaDataPrevista,
-                    summaries = summaries,
-                    forecastCustomers = previsaoDemanda.clientesPrevistos
+                analytics = calculadoraAnalytics.calcular(
+                    preparos = foodsNaDataPrevista.map(FoodUiModel::toPreparo),
+                    producoes = summaries,
+                    clientesPrevistos = previsaoDemanda.clientesPrevistos
                 )
             )
         }
@@ -543,113 +539,9 @@ class SemSobraViewModel(application: Application) : AndroidViewModel(application
     }
 }
 
-private fun calculateAnalytics(
-    foods: List<FoodUiModel>,
-    summaries: List<ProductionSummary>,
-    forecastCustomers: Int
-): AnalyticsResult {
-    val closed = summaries.filter { it.fechado && it.day.clientesAtendidos > 0 }
-    val historyByFoodId = closed
-        .flatMap { summary ->
-            summary.items.map { item -> Triple(item.food.id, summary.day.clientesAtendidos, item) }
-        }
-        .groupBy(keySelector = { it.first }, valueTransform = { it.second to it.third })
-
-    val forecastItems = if (forecastCustomers == 0) {
-        emptyList()
-    } else {
-        foods.mapNotNull { food ->
-            val history = historyByFoodId[food.id].orEmpty()
-            val customerTotal = history.sumOf { it.first }
-            if (customerTotal == 0) return@mapNotNull null
-            val averagePerCustomer = history.sumOf { it.second.consumo } / customerTotal
-            val hadShortage = history.take(3).any { it.second.item.acabouAntesDoFim }
-            val safetyFactor = if (hadShortage) 1.1 else 1.0
-            ForecastItem(
-                food = food,
-                quantidadeRecomendada = QuantityPolicy.normalize(
-                    averagePerCustomer * forecastCustomers * safetyFactor
-                ),
-                consumoMedioPorCliente = QuantityPolicy.normalize(averagePerCustomer),
-                ajusteSegurancaAplicado = hadShortage
-            )
-        }
-    }
-
-    val alerts = closed.take(3).flatMap { summary ->
-        summary.items.mapNotNull { display ->
-            when {
-                display.item.acabouAntesDoFim ->
-                    "${display.food.nome} acabou antes do fim do atendimento."
-                display.item.quantidadeProduzida > 0 &&
-                    display.item.quantidadeSobra / display.item.quantidadeProduzida >= 0.2 ->
-                    "${display.food.nome} teve sobra acima de 20%."
-                else -> null
-            }
-        }
-    }.distinct().take(5)
-
-    val allClosedItems = closed.flatMap { it.items }
-    val leftovers = allClosedItems
-        .groupBy { it.food.id }
-        .mapNotNull { (_, items) ->
-            val quantity = QuantityPolicy.sum(items.map { it.item.quantidadeSobra })
-            items.firstOrNull()?.food?.takeIf { quantity > 0.0 }?.let {
-                FoodMetric(it.toFoodUiModel(), quantity)
-            }
-        }
-        .sortedByDescending { it.quantidade }
-    val shortages = allClosedItems
-        .filter { it.item.acabouAntesDoFim }
-        .groupBy { it.food.id }
-        .mapNotNull { (_, items) ->
-            items.firstOrNull()?.food?.let {
-                FoodMetric(it.toFoodUiModel(), items.size.toDouble())
-            }
-        }
-        .sortedByDescending { it.quantidade }
-
-    val totalSobrasPorUnidade = allClosedItems
-        .groupBy { it.food.unidadeMedida.trim().lowercase() }
-        .map { (unit, items) ->
-            QuantityByUnit(
-                unidadeMedida = unit,
-                quantidade = QuantityPolicy.sum(items.map { it.item.quantidadeSobra })
-            )
-        }
-        .filter { it.quantidade > 0.0 }
-        .sortedBy(QuantityByUnit::unidadeMedida)
-
-    return AnalyticsResult(
-        forecast = ForecastResult(
-            clientesPrevistos = forecastCustomers,
-            items = forecastItems,
-            alerts = alerts
-        ),
-        report = ReportSummary(
-            totalSobrasPorUnidade = totalSobrasPorUnidade,
-            alimentosComMaisSobra = leftovers,
-            alimentosQueMaisAcabaram = shortages
-        )
-    )
-}
-
 private data class DerivedState(
     val previsaoDemanda: ResultadoPrevisao,
     val analytics: AnalyticsResult
-)
-
-private fun emptyAnalytics() = AnalyticsResult(
-    forecast = ForecastResult(
-        clientesPrevistos = 0,
-        items = emptyList(),
-        alerts = emptyList()
-    ),
-    report = ReportSummary(
-        totalSobrasPorUnidade = emptyList(),
-        alimentosComMaisSobra = emptyList(),
-        alimentosQueMaisAcabaram = emptyList()
-    )
 )
 
 private fun Preparo.toFoodUiModel() = FoodUiModel(

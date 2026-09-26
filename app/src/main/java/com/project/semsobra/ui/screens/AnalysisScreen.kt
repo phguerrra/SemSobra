@@ -40,7 +40,7 @@ import com.project.semsobra.ui.components.MetricCard
 import com.project.semsobra.ui.components.ProductionSummaryCard
 import com.project.semsobra.ui.components.SectionTitle
 import com.project.semsobra.ui.components.SimpleMetricRow
-import com.project.semsobra.ui.model.AnalyticsResult
+import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.ProductionItemUiModel
 import com.project.semsobra.domain.model.QuantityPolicy
