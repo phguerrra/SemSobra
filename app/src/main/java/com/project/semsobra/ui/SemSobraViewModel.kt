@@ -19,6 +19,7 @@ import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.repository.PreparoRepository
 import com.project.semsobra.domain.repository.ProducaoRepository
+import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
@@ -61,6 +62,7 @@ enum class SaveStatus {
 class SemSobraViewModel(
     private val preparoRepository: PreparoRepository,
     private val producaoRepository: ProducaoRepository,
+    private val cadastrarPreparo: CadastrarPreparoUseCase,
     private val excluirPreparo: ExcluirPreparoUseCase,
     private val validarNomePreparo: ValidarNomePreparoUseCase,
     private val salvarProducao: SalvarProducaoUseCase,
@@ -165,20 +167,15 @@ class SemSobraViewModel(
     ) {
         viewModelScope.launch {
             try {
-                val nomeDisponivel = withContext(Dispatchers.IO) {
-                    validarNomePreparo.estaDisponivel(nome, diaDaSemana, null)
+                val resultado = withContext(Dispatchers.IO) {
+                    cadastrarPreparo.executar(nome, descricao, unidadeMedida, diaDaSemana)
                 }
-                if (!nomeDisponivel) {
+                if (resultado == CadastrarPreparoUseCase.Resultado.NOME_DUPLICADO) {
                     setFoodSaveStatus(SaveStatus.ERROR)
                     emitMessage(UiMessage.Conflict("Já existe um preparo com esse nome neste dia"))
                     return@launch
                 }
 
-                withContext(Dispatchers.IO) {
-                    preparoRepository.inserir(
-                        Preparo(nome, descricao, unidadeMedida, diaDaSemana)
-                    )
-                }
                 atualizarPreparosSalvos()
                 setFoodSaveStatus(SaveStatus.SUCCESS)
                 emitMessage(UiMessage.Success("Preparo cadastrado"))

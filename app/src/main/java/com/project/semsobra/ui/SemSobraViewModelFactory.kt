@@ -10,6 +10,7 @@ import com.project.semsobra.domain.analytics.CalculadoraAnalytics
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.repository.PreparoRepository
 import com.project.semsobra.domain.repository.ProducaoRepository
+import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
@@ -24,12 +25,14 @@ class SemSobraViewModelFactory(application: Application) : ViewModelProvider.Fac
             "ViewModel não suportado: ${modelClass.name}"
         }
 
+        val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
         @Suppress("UNCHECKED_CAST")
         return SemSobraViewModel(
             preparoRepository = preparoRepository,
             producaoRepository = producaoRepository,
+            cadastrarPreparo = CadastrarPreparoUseCase(preparoRepository, validarNomePreparo),
             excluirPreparo = ExcluirPreparoUseCase(preparoRepository),
-            validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository),
+            validarNomePreparo = validarNomePreparo,
             salvarProducao = SalvarProducaoUseCase(producaoRepository),
             fecharProducao = FecharProducaoUseCase(producaoRepository),
             motorPrevisao = PrevisaoPorMediaPonderada(),
