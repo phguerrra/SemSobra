@@ -1,5 +1,6 @@
 package com.project.semsobra.ui
 
+import android.app.Application
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
@@ -40,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -60,7 +62,16 @@ import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SemSobraApp(viewModel: SemSobraViewModel = viewModel()) {
+fun SemSobraApp() {
+    val application = LocalContext.current.applicationContext as Application
+    val factory = remember(application) { SemSobraViewModelFactory(application) }
+    val viewModel: SemSobraViewModel = viewModel(factory = factory)
+    SemSobraApp(viewModel)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SemSobraApp(viewModel: SemSobraViewModel) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = AppRoute.fromRoute(backStackEntry?.destination?.route)

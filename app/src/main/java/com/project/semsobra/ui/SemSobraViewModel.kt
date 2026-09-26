@@ -1,14 +1,11 @@
 package com.project.semsobra.ui
 
-import android.app.Application
 import android.database.sqlite.SQLiteConstraintException
 import android.database.sqlite.SQLiteException
 import android.util.Log
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
-import com.project.semsobra.data.repository.PreparoLocalRepository
-import com.project.semsobra.data.repository.ProducaoLocalRepository
 import com.project.semsobra.domain.analytics.CalculadoraAnalytics
 import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.Preparo
@@ -17,10 +14,10 @@ import com.project.semsobra.domain.model.ProductionItemDisplay
 import com.project.semsobra.domain.model.ProductionItemUiModel
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.previsao.MotorPrevisao
-import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
+import com.project.semsobra.domain.repository.PreparoRepository
 import com.project.semsobra.domain.repository.ProducaoRepository
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
@@ -61,16 +58,17 @@ enum class SaveStatus {
     ERROR
 }
 
-class SemSobraViewModel(application: Application) : AndroidViewModel(application) {
-    private val motorPrevisao: MotorPrevisao = PrevisaoPorMediaPonderada()
-    private val calculadoraAnalytics = CalculadoraAnalytics()
-    private val historicoMapper = HistoricoProducaoMapper()
-    private val preparoRepository = PreparoLocalRepository(application)
-    private val excluirPreparo = ExcluirPreparoUseCase(preparoRepository)
-    private val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
-    private val producaoRepository: ProducaoRepository = ProducaoLocalRepository(application)
-    private val salvarProducao = SalvarProducaoUseCase(producaoRepository)
-    private val fecharProducao = FecharProducaoUseCase(producaoRepository)
+class SemSobraViewModel(
+    private val preparoRepository: PreparoRepository,
+    private val producaoRepository: ProducaoRepository,
+    private val excluirPreparo: ExcluirPreparoUseCase,
+    private val validarNomePreparo: ValidarNomePreparoUseCase,
+    private val salvarProducao: SalvarProducaoUseCase,
+    private val fecharProducao: FecharProducaoUseCase,
+    private val motorPrevisao: MotorPrevisao,
+    private val calculadoraAnalytics: CalculadoraAnalytics,
+    private val historicoMapper: HistoricoProducaoMapper
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         SemSobraUiState(previsaoDemanda = calcularPrevisaoDemanda(emptyList()))
