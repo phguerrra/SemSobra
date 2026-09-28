@@ -42,7 +42,7 @@ import com.project.semsobra.ui.components.SectionTitle
 import com.project.semsobra.ui.components.SimpleMetricRow
 import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.ProductionSummary
-import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.ui.util.formatQuantity
 import com.project.semsobra.ui.util.formatDate
@@ -63,7 +63,7 @@ fun AnalysisScreen(
     previsaoDemanda: ResultadoPrevisao,
     summaries: List<ProductionSummary>,
     saveStatus: SaveStatus,
-    onSaveHistory: (Long, Int, List<ProductionItemUiModel>) -> Unit,
+    onSaveHistory: (Long, Int, List<ItemProducao>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -442,7 +442,7 @@ private fun HistoryEditDialog(
     summary: ProductionSummary,
     saving: Boolean,
     onDismiss: () -> Unit,
-    onSave: (Int, List<ProductionItemUiModel>) -> Unit
+    onSave: (Int, List<ItemProducao>) -> Unit
 ) {
     var customers by remember(summary.day.id) {
         mutableStateOf(summary.day.clientesAtendidos.toString())

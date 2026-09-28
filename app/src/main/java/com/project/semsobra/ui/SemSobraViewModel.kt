@@ -9,9 +9,9 @@ import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.domain.analytics.CalculadoraAnalytics
 import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.Preparo
-import com.project.semsobra.domain.model.ProductionDayUiModel
+import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionItemDisplay
-import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
@@ -345,7 +345,7 @@ class SemSobraViewModel(
             return
         }
 
-        val production = ProductionDayUiModel(
+        val production = ProducaoDia(
             data = today.toString(),
             diaDaSemana = today.dayOfWeek.value
         )
@@ -380,7 +380,7 @@ class SemSobraViewModel(
     fun closeProduction(
         productionDayId: Long,
         clientesAtendidos: Int,
-        closingItems: List<ProductionItemUiModel>
+        closingItems: List<ItemProducao>
     ) {
         if (_uiState.value.closingSaveStatus == SaveStatus.SAVING) return
 
@@ -392,7 +392,7 @@ class SemSobraViewModel(
         }
         val editingHistory = production.fechado
 
-        val closingById = closingItems.associateBy(ProductionItemUiModel::id)
+        val closingById = closingItems.associateBy(ItemProducao::id)
         val itemsToSave = production.items.map { display ->
             val closingItem = closingById[display.item.id] ?: display.item
             closingItem.copy(

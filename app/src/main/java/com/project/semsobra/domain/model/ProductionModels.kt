@@ -2,7 +2,7 @@ package com.project.semsobra.domain.model
 
 import com.project.semsobra.domain.previsao.model.Turno
 
-data class ProductionDayUiModel(
+data class ProducaoDia(
     val id: Long = 0,
     val data: String,
     val diaDaSemana: Int,
@@ -12,7 +12,7 @@ data class ProductionDayUiModel(
     val alteradoEm: String? = null
 )
 
-data class ProductionItemUiModel(
+data class ItemProducao(
     val id: Long = 0,
     val producaoDiaId: Long,
     val alimentoId: Long,
@@ -23,13 +23,13 @@ data class ProductionItemUiModel(
 )
 
 data class ProductionItemDisplay(
-    val item: ProductionItemUiModel,
+    val item: ItemProducao,
     val food: Preparo,
     val consumo: Double
 )
 
 data class ProductionSummary(
-    val day: ProductionDayUiModel,
+    val day: ProducaoDia,
     val items: List<ProductionItemDisplay>,
     val fechado: Boolean
 )

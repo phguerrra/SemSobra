@@ -43,7 +43,7 @@ import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.ui.components.SectionTitle
 import com.project.semsobra.domain.model.ProductionItemDisplay
-import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
@@ -54,7 +54,7 @@ import com.project.semsobra.ui.util.parseDoubleOrNull
 fun ClosingScreen(
     summaries: List<ProductionSummary>,
     saveStatus: SaveStatus,
-    onClose: (Long, Int, List<ProductionItemUiModel>) -> Unit,
+    onClose: (Long, Int, List<ItemProducao>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedId by rememberSaveable { androidx.compose.runtime.mutableStateOf<Long?>(null) }

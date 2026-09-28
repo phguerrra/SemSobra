@@ -1,9 +1,9 @@
 package com.project.semsobra.domain.analytics
 
 import com.project.semsobra.domain.model.Preparo
-import com.project.semsobra.domain.model.ProductionDayUiModel
+import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionItemDisplay
-import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.ProductionSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -61,7 +61,7 @@ class CalculadoraAnalyticsTest {
         acabouAntesDoFim: Boolean = false,
         sobra: Double = 2.0
     ) = ProductionSummary(
-        day = ProductionDayUiModel(
+        day = ProducaoDia(
             id = 1L,
             data = "2026-09-25",
             diaDaSemana = 5,
@@ -69,7 +69,7 @@ class CalculadoraAnalyticsTest {
         ),
         items = listOf(
             ProductionItemDisplay(
-                item = ProductionItemUiModel(
+                item = ItemProducao(
                     id = 1L,
                     producaoDiaId = 1L,
                     alimentoId = arroz.id,

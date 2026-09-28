@@ -1,7 +1,7 @@
 package com.project.semsobra.domain.usecase
 
-import com.project.semsobra.domain.model.ProductionDayUiModel
-import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ProducaoDia
+import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.repository.ProducaoRepository
 import kotlinx.coroutines.flow.Flow
@@ -15,7 +15,7 @@ class ProducaoUseCasesTest {
     fun salvarProducaoPersisteDadosEDevolveHistoricoAtualizado() {
         val repository = RepositorioFalso()
         val useCase = SalvarProducaoUseCase(repository)
-        val producao = ProductionDayUiModel(data = "2026-09-25", diaDaSemana = 5)
+        val producao = ProducaoDia(data = "2026-09-25", diaDaSemana = 5)
         val quantidades = mapOf(10L to 12.5)
 
         val resultado = useCase.executar(producao, quantidades)
@@ -28,7 +28,7 @@ class ProducaoUseCasesTest {
     @Test(expected = IllegalArgumentException::class)
     fun salvarProducaoRejeitaQuantidadeInvalida() {
         SalvarProducaoUseCase(RepositorioFalso()).executar(
-            ProductionDayUiModel(data = "2026-09-25", diaDaSemana = 5),
+            ProducaoDia(data = "2026-09-25", diaDaSemana = 5),
             mapOf(10L to Double.NaN)
         )
     }
@@ -38,7 +38,7 @@ class ProducaoUseCasesTest {
         val repository = RepositorioFalso()
         val useCase = FecharProducaoUseCase(repository)
         val itens = listOf(
-            ProductionItemUiModel(
+            ItemProducao(
                 id = 20L,
                 producaoDiaId = 30L,
                 alimentoId = 10L,
@@ -62,7 +62,7 @@ class ProducaoUseCasesTest {
             producaoId = 30L,
             clientesAtendidos = 100,
             itens = listOf(
-                ProductionItemUiModel(
+                ItemProducao(
                     id = 20L,
                     producaoDiaId = 30L,
                     alimentoId = 10L,
@@ -75,17 +75,17 @@ class ProducaoUseCasesTest {
 
     private class RepositorioFalso : ProducaoRepository {
         val historico = emptyList<ProductionSummary>()
-        var producaoSalva: ProductionDayUiModel? = null
+        var producaoSalva: ProducaoDia? = null
         var quantidadesSalvas: Map<Long, Double>? = null
         var fechamentoFoiSalvo = false
         var producaoFechadaId: Long? = null
         var clientesAtendidos: Int? = null
-        var itensFechados: List<ProductionItemUiModel>? = null
+        var itensFechados: List<ItemProducao>? = null
 
         override fun observarHistorico(): Flow<List<ProductionSummary>> = emptyFlow()
 
         override fun salvarProducao(
-            producao: ProductionDayUiModel,
+            producao: ProducaoDia,
             quantidadesPorPreparo: Map<Long, Double>
         ): Long {
             producaoSalva = producao
@@ -96,7 +96,7 @@ class ProducaoUseCasesTest {
         override fun fecharProducao(
             producaoId: Long,
             clientesAtendidos: Int,
-            itens: List<ProductionItemUiModel>
+            itens: List<ItemProducao>
         ) {
             fechamentoFoiSalvo = true
             producaoFechadaId = producaoId

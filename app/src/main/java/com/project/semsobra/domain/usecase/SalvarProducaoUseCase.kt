@@ -1,6 +1,6 @@
 package com.project.semsobra.domain.usecase
 
-import com.project.semsobra.domain.model.ProductionDayUiModel
+import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.repository.ProducaoRepository
 
@@ -9,7 +9,7 @@ class SalvarProducaoUseCase(
     private val validarDados: ValidarDadosProducaoUseCase = ValidarDadosProducaoUseCase()
 ) {
     fun executar(
-        producao: ProductionDayUiModel,
+        producao: ProducaoDia,
         quantidadesPorPreparo: Map<Long, Double>
     ): List<ProductionSummary> {
         require(quantidadesPorPreparo.isNotEmpty()) {

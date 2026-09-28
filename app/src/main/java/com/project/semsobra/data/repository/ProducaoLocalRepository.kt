@@ -6,9 +6,9 @@ import com.project.semsobra.data.local.room.ItemProducaoEntity
 import com.project.semsobra.data.local.room.ProducaoEntity
 import com.project.semsobra.data.local.room.SemSobraDatabase
 import com.project.semsobra.domain.model.Preparo
-import com.project.semsobra.domain.model.ProductionDayUiModel
+import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionItemDisplay
-import com.project.semsobra.domain.model.ProductionItemUiModel
+import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.Turno
@@ -24,7 +24,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
         dao.observarHistorico().map(::mapearHistorico)
 
     override fun salvarProducao(
-        producao: ProductionDayUiModel,
+        producao: ProducaoDia,
         quantidadesPorPreparo: Map<Long, Double>
     ): Long {
         require(quantidadesPorPreparo.isNotEmpty()) {
@@ -59,7 +59,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
     override fun fecharProducao(
         producaoId: Long,
         clientesAtendidos: Int,
-        itens: List<ProductionItemUiModel>
+        itens: List<ItemProducao>
     ) {
         require(producaoId > 0) { "A produção precisa ter um ID válido" }
         require(clientesAtendidos > 0) { "Informe os clientes atendidos" }
@@ -101,7 +101,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
         .map { productionRows ->
             val first = productionRows.first()
             ProductionSummary(
-                day = ProductionDayUiModel(
+                day = ProducaoDia(
                     id = first.producaoId,
                     data = first.data,
                     diaDaSemana = first.producaoDiaDaSemana,
@@ -119,7 +119,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
     private fun mapearItem(row: HistoricoRow): ProductionItemDisplay {
         val produced = QuantityPolicy.normalize(row.quantidadeProduzida)
         val leftover = QuantityPolicy.normalize(row.quantidadeSobra)
-        val item = ProductionItemUiModel(
+        val item = ItemProducao(
             id = row.itemId,
             producaoDiaId = row.producaoId,
             alimentoId = row.preparoId,
@@ -143,7 +143,7 @@ class ProducaoLocalRepository(context: Context) : ProducaoRepository {
         )
     }
 
-    private fun ProductionDayUiModel.toEntity(id: Long) = ProducaoEntity(
+    private fun ProducaoDia.toEntity(id: Long) = ProducaoEntity(
         id = id,
         data = data,
         diaDaSemana = diaDaSemana,
