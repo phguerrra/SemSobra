@@ -12,6 +12,16 @@ import org.junit.Test
 
 class ProducaoUseCasesTest {
     @Test
+    fun listarHistoricoDevolveDadosDoRepositorio() {
+        val repository = RepositorioFalso()
+
+        val resultado = ListarHistoricoProducaoUseCase(repository).executar()
+
+        assertTrue(repository.listarHistoricoFoiChamado)
+        assertEquals(repository.historico, resultado)
+    }
+
+    @Test
     fun salvarProducaoPersisteDadosEDevolveHistoricoAtualizado() {
         val repository = RepositorioFalso()
         val useCase = SalvarProducaoUseCase(repository)
@@ -81,6 +91,7 @@ class ProducaoUseCasesTest {
         var producaoFechadaId: Long? = null
         var clientesAtendidos: Int? = null
         var itensFechados: List<ItemProducao>? = null
+        var listarHistoricoFoiChamado = false
 
         override fun observarHistorico(): Flow<List<ProductionSummary>> = emptyFlow()
 
@@ -104,6 +115,9 @@ class ProducaoUseCasesTest {
             itensFechados = itens
         }
 
-        override fun listarHistorico(): List<ProductionSummary> = historico
+        override fun listarHistorico(): List<ProductionSummary> {
+            listarHistoricoFoiChamado = true
+            return historico
+        }
     }
 }

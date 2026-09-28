@@ -15,6 +15,8 @@ import com.project.semsobra.domain.usecase.AtualizarPreparoUseCase
 import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
+import com.project.semsobra.domain.usecase.ListarHistoricoProducaoUseCase
+import com.project.semsobra.domain.usecase.ListarPreparosUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 
@@ -30,12 +32,12 @@ class SemSobraViewModelFactory(application: Application) : ViewModelProvider.Fac
         val validarNomePreparo = ValidarNomePreparoUseCase(preparoRepository)
         @Suppress("UNCHECKED_CAST")
         return SemSobraViewModel(
-            preparoRepository = preparoRepository,
-            producaoRepository = producaoRepository,
             alterarDiasPreparo = AlterarDiasPreparoUseCase(preparoRepository),
             atualizarPreparoUseCase = AtualizarPreparoUseCase(preparoRepository, validarNomePreparo),
             cadastrarPreparo = CadastrarPreparoUseCase(preparoRepository, validarNomePreparo),
             excluirPreparo = ExcluirPreparoUseCase(preparoRepository),
+            listarPreparos = ListarPreparosUseCase(preparoRepository),
+            listarHistoricoProducao = ListarHistoricoProducaoUseCase(producaoRepository),
             salvarProducao = SalvarProducaoUseCase(producaoRepository),
             fecharProducao = FecharProducaoUseCase(producaoRepository),
             motorPrevisao = PrevisaoPorMediaPonderada(),

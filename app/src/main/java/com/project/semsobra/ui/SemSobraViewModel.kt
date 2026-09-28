@@ -17,13 +17,13 @@ import com.project.semsobra.domain.previsao.MotorPrevisao
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
-import com.project.semsobra.domain.repository.PreparoRepository
-import com.project.semsobra.domain.repository.ProducaoRepository
 import com.project.semsobra.domain.usecase.AlterarDiasPreparoUseCase
 import com.project.semsobra.domain.usecase.AtualizarPreparoUseCase
 import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import com.project.semsobra.domain.usecase.FecharProducaoUseCase
+import com.project.semsobra.domain.usecase.ListarHistoricoProducaoUseCase
+import com.project.semsobra.domain.usecase.ListarPreparosUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.disponivelNoDia
@@ -61,12 +61,12 @@ enum class SaveStatus {
 }
 
 class SemSobraViewModel(
-    private val preparoRepository: PreparoRepository,
-    private val producaoRepository: ProducaoRepository,
     private val alterarDiasPreparo: AlterarDiasPreparoUseCase,
     private val atualizarPreparoUseCase: AtualizarPreparoUseCase,
     private val cadastrarPreparo: CadastrarPreparoUseCase,
     private val excluirPreparo: ExcluirPreparoUseCase,
+    private val listarPreparos: ListarPreparosUseCase,
+    private val listarHistoricoProducao: ListarHistoricoProducaoUseCase,
     private val salvarProducao: SalvarProducaoUseCase,
     private val fecharProducao: FecharProducaoUseCase,
     private val motorPrevisao: MotorPrevisao,
@@ -96,7 +96,7 @@ class SemSobraViewModel(
         viewModelScope.launch {
             try {
                 val (preparos, historico) = withContext(Dispatchers.IO) {
-                    preparoRepository.listarTodos() to producaoRepository.listarHistorico()
+                    listarPreparos.executar() to listarHistoricoProducao.executar()
                 }
                 val foods = preparos.map(Preparo::toFoodUiModel)
 
@@ -124,7 +124,7 @@ class SemSobraViewModel(
         productionSummaries: List<ProductionSummary> = _uiState.value.productionSummaries
     ) {
         val preparos = withContext(Dispatchers.IO) {
-            preparoRepository.listarTodos()
+            listarPreparos.executar()
         }
         val foods = preparos.map(Preparo::toFoodUiModel)
         val foodsById = foods.associateBy(FoodUiModel::id)
