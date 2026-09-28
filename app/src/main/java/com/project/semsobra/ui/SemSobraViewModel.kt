@@ -19,6 +19,7 @@ import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.repository.PreparoRepository
 import com.project.semsobra.domain.repository.ProducaoRepository
+import com.project.semsobra.domain.usecase.AlterarDiasPreparoUseCase
 import com.project.semsobra.domain.usecase.AtualizarPreparoUseCase
 import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
@@ -62,6 +63,7 @@ enum class SaveStatus {
 class SemSobraViewModel(
     private val preparoRepository: PreparoRepository,
     private val producaoRepository: ProducaoRepository,
+    private val alterarDiasPreparo: AlterarDiasPreparoUseCase,
     private val atualizarPreparoUseCase: AtualizarPreparoUseCase,
     private val cadastrarPreparo: CadastrarPreparoUseCase,
     private val excluirPreparo: ExcluirPreparoUseCase,
@@ -291,18 +293,16 @@ class SemSobraViewModel(
     }
 
     fun toggleFoodDay(food: FoodUiModel, day: Int, selected: Boolean) {
-        if (day !in 1..7) return
-        val bit = 1 shl (day - 1)
-        val newMask = if (selected) food.diasSemanaMask or bit else food.diasSemanaMask and bit.inv()
         viewModelScope.launch {
             try {
-                val updated = withContext(Dispatchers.IO) {
-                    preparoRepository.atualizarDias(food.id, newMask)
+                val resultado = withContext(Dispatchers.IO) {
+                    alterarDiasPreparo.executar(food.id, day, selected)
                 }
-                if (!updated) {
+                if (resultado.status == AlterarDiasPreparoUseCase.Status.NAO_ENCONTRADO) {
                     emitMessage(UiMessage.NotFound("Preparo não encontrado"))
                     return@launch
                 }
+                val newMask = resultado.diasSemanaMask
                 val current = _uiState.value
                 val updatedFoods = current.foods.map { savedFood ->
                     if (savedFood.id == food.id) savedFood.copy(diasSemanaMask = newMask)

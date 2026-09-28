@@ -10,6 +10,7 @@ import com.project.semsobra.domain.analytics.CalculadoraAnalytics
 import com.project.semsobra.domain.previsao.PrevisaoPorMediaPonderada
 import com.project.semsobra.domain.repository.PreparoRepository
 import com.project.semsobra.domain.repository.ProducaoRepository
+import com.project.semsobra.domain.usecase.AlterarDiasPreparoUseCase
 import com.project.semsobra.domain.usecase.AtualizarPreparoUseCase
 import com.project.semsobra.domain.usecase.CadastrarPreparoUseCase
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
@@ -31,6 +32,7 @@ class SemSobraViewModelFactory(application: Application) : ViewModelProvider.Fac
         return SemSobraViewModel(
             preparoRepository = preparoRepository,
             producaoRepository = producaoRepository,
+            alterarDiasPreparo = AlterarDiasPreparoUseCase(preparoRepository),
             atualizarPreparoUseCase = AtualizarPreparoUseCase(preparoRepository, validarNomePreparo),
             cadastrarPreparo = CadastrarPreparoUseCase(preparoRepository, validarNomePreparo),
             excluirPreparo = ExcluirPreparoUseCase(preparoRepository),
