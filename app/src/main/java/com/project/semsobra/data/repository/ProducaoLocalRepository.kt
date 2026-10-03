@@ -1,6 +1,5 @@
 package com.project.semsobra.data.repository
 
-import android.content.Context
 import com.project.semsobra.data.local.room.HistoricoRow
 import com.project.semsobra.data.local.room.ItemProducaoEntity
 import com.project.semsobra.data.local.room.ProducaoEntity
@@ -16,8 +15,7 @@ import com.project.semsobra.domain.repository.ProducaoRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class ProducaoLocalRepository(context: Context) : ProducaoRepository {
-    private val database = SemSobraDatabase.getInstance(context)
+class ProducaoLocalRepository(private val database: SemSobraDatabase) : ProducaoRepository {
     private val dao = database.producaoDao()
 
     override fun observarHistorico(): Flow<List<ProductionSummary>> =

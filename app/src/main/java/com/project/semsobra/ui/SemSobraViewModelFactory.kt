@@ -3,6 +3,7 @@ package com.project.semsobra.ui
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.project.semsobra.data.local.room.SemSobraDatabase
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
 import com.project.semsobra.data.repository.ProducaoLocalRepository
@@ -21,8 +22,9 @@ import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.domain.usecase.ValidarNomePreparoUseCase
 
 class SemSobraViewModelFactory(application: Application) : ViewModelProvider.Factory {
-    private val preparoRepository: PreparoRepository = PreparoLocalRepository(application)
-    private val producaoRepository: ProducaoRepository = ProducaoLocalRepository(application)
+    private val database = SemSobraDatabase.getInstance(application)
+    private val preparoRepository: PreparoRepository = PreparoLocalRepository(database.preparoDao())
+    private val producaoRepository: ProducaoRepository = ProducaoLocalRepository(database)
 
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         require(modelClass.isAssignableFrom(SemSobraViewModel::class.java)) {

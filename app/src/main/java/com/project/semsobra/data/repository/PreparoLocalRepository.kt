@@ -1,17 +1,14 @@
 package com.project.semsobra.data.repository
 
-import android.content.Context
 import com.project.semsobra.data.local.room.PreparoDao
 import com.project.semsobra.data.local.room.PreparoEntity
-import com.project.semsobra.data.local.room.SemSobraDatabase
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.repository.PreparoRepository
 import java.util.Optional
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-class PreparoLocalRepository(context: Context) : PreparoRepository {
-    private val dao: PreparoDao = SemSobraDatabase.getInstance(context).preparoDao()
+class PreparoLocalRepository(private val dao: PreparoDao) : PreparoRepository {
 
     fun observarTodos(): Flow<List<Preparo>> = dao.observarAtivos().map { entities ->
         entities.map { it.toDomain() }
