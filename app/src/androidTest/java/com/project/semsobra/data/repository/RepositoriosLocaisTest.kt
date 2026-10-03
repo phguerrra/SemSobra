@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.project.semsobra.data.local.room.SemSobraDatabase
+import com.project.semsobra.domain.exception.PreparoIndisponivelException
 import com.project.semsobra.domain.exception.ProducaoFechadaException
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
@@ -13,6 +14,7 @@ import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -175,5 +177,93 @@ class RepositoriosLocaisTest {
         assertEquals(110, historico.day.clientesAtendidos)
         assertEquals(1.0, historico.items.single().item.quantidadeSobra, 0.0)
         assertTrue(!historico.day.alteradoEm.isNullOrBlank())
+    }
+
+    @Test
+    fun preparoInativoNaoPodeSerUsadoEmNovaProducao() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        assertTrue(preparos.inativar(preparoId))
+        val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
+
+        assertThrows(PreparoIndisponivelException::class.java) {
+            producoes.salvarProducao(producao, mapOf(preparoId to 10.0))
+        }
+
+        assertNull(database.producaoDao().buscarId(producao.data, producao.turno.name))
+        assertTrue(producoes.listarHistorico().isEmpty())
+    }
+
+    @Test
+    fun preparoInativoBloqueiaTodaProducaoMesmoComOutrosPreparosAtivos() {
+        val ativoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val inativoId = preparos.inserir(Preparo("Feijão", "", "kg", 1))
+        assertTrue(preparos.inativar(inativoId))
+        val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
+
+        assertThrows(PreparoIndisponivelException::class.java) {
+            producoes.salvarProducao(producao, linkedMapOf(ativoId to 10.0, inativoId to 5.0))
+        }
+
+        assertNull(database.producaoDao().buscarId(producao.data, producao.turno.name))
+        assertTrue(database.producaoDao().listarHistorico().isEmpty())
+    }
+
+    @Test
+    fun tentativaDeSalvarComPreparoInativoPreservaProducaoAbertaExistente() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val outroPreparoId = preparos.inserir(Preparo("Feijão", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
+        val producaoId = producoes.salvarProducao(producao, mapOf(preparoId to 10.0))
+        assertTrue(preparos.inativar(preparoId))
+        val historicoAntes = database.producaoDao().listarHistorico()
+
+        assertThrows(PreparoIndisponivelException::class.java) {
+            producoes.salvarProducao(
+                producao.copy(restauranteAberto = false),
+                linkedMapOf(outroPreparoId to 5.0, preparoId to 20.0)
+            )
+        }
+
+        assertEquals(producaoId, database.producaoDao().buscarId(producao.data, producao.turno.name))
+        assertEquals(historicoAntes, database.producaoDao().listarHistorico())
+        assertFalse(producoes.listarHistorico().single().fechado)
+    }
+
+    @Test
+    fun preparoInativoNoHistoricoPermiteFechamentoECorrecao() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val producaoId = producoes.salvarProducao(
+            ProducaoDia(data = "2026-10-03", diaDaSemana = 6), mapOf(preparoId to 10.0)
+        )
+        val item = producoes.listarHistorico().single().items.single().item
+        assertTrue(preparos.inativar(preparoId))
+
+        producoes.fecharProducao(producaoId, 100, listOf(item.copy(quantidadeSobra = 2.0)))
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        assertEquals(100, fechado.day.clientesAtendidos)
+        assertEquals(2.0, fechado.items.single().item.quantidadeSobra, 0.0)
+
+        producoes.fecharProducao(producaoId, 110, listOf(item.copy(quantidadeSobra = 1.0)))
+
+        val corrigido = producoes.listarHistorico().single()
+        assertTrue(corrigido.fechado)
+        assertEquals(110, corrigido.day.clientesAtendidos)
+        assertEquals(1.0, corrigido.items.single().item.quantidadeSobra, 0.0)
+        assertTrue(!corrigido.day.alteradoEm.isNullOrBlank())
+        assertFalse(database.preparoDao().buscarPorId(preparoId)!!.ativo)
+        assertTrue(preparos.listarTodos().isEmpty())
+    }
+
+    @Test
+    fun preparoInexistenteBloqueiaProducaoSemCriarRegistroParcial() {
+        val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
+
+        assertThrows(PreparoIndisponivelException::class.java) {
+            producoes.salvarProducao(producao, mapOf(Long.MAX_VALUE to 10.0))
+        }
+
+        assertNull(database.producaoDao().buscarId(producao.data, producao.turno.name))
+        assertTrue(producoes.listarHistorico().isEmpty())
     }
 }

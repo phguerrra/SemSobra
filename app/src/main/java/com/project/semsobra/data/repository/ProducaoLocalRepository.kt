@@ -4,6 +4,7 @@ import com.project.semsobra.data.local.room.HistoricoRow
 import com.project.semsobra.data.local.room.ItemProducaoEntity
 import com.project.semsobra.data.local.room.ProducaoEntity
 import com.project.semsobra.data.local.room.SemSobraDatabase
+import com.project.semsobra.domain.exception.PreparoIndisponivelException
 import com.project.semsobra.domain.exception.ProducaoFechadaException
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.map
 
 class ProducaoLocalRepository(private val database: SemSobraDatabase) : ProducaoRepository {
     private val dao = database.producaoDao()
+    private val preparoDao = database.preparoDao()
 
     override fun observarHistorico(): Flow<List<ProductionSummary>> =
         dao.observarHistorico().map(::mapearHistorico)
@@ -38,6 +40,9 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
             val existenteId = dao.buscarId(producao.data, producao.turno.name)
             if (existenteId != null && dao.estaFechada(existenteId) == true) {
                 throw ProducaoFechadaException()
+            }
+            if (quantidadesPorPreparo.keys.any { preparoDao.buscarPorId(it)?.ativo != true }) {
+                throw PreparoIndisponivelException()
             }
             val entity = producao.toEntity(id = existenteId ?: 0L)
             val producaoId = existenteId ?: dao.inserirProducao(entity)
