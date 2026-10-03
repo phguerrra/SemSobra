@@ -4,6 +4,7 @@ import com.project.semsobra.data.local.room.HistoricoRow
 import com.project.semsobra.data.local.room.ItemProducaoEntity
 import com.project.semsobra.data.local.room.ProducaoEntity
 import com.project.semsobra.data.local.room.SemSobraDatabase
+import com.project.semsobra.domain.exception.ProducaoFechadaException
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionItemDisplay
@@ -35,6 +36,9 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
         var resultado = 0L
         database.runInTransaction {
             val existenteId = dao.buscarId(producao.data, producao.turno.name)
+            if (existenteId != null && dao.estaFechada(existenteId) == true) {
+                throw ProducaoFechadaException()
+            }
             val entity = producao.toEntity(id = existenteId ?: 0L)
             val producaoId = existenteId ?: dao.inserirProducao(entity)
             if (existenteId != null) dao.atualizarProducao(entity)

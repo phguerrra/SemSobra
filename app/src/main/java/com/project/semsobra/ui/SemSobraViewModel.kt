@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.domain.analytics.CalculadoraAnalytics
+import com.project.semsobra.domain.exception.ProducaoFechadaException
 import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
@@ -358,6 +359,9 @@ class SemSobraViewModel(
                 updateState(_uiState.value.foods, savedHistory)
                 setProductionSaveStatus(SaveStatus.SUCCESS)
                 emitMessage(UiMessage.Success("Produção salva"))
+            } catch (error: ProducaoFechadaException) {
+                setProductionSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Conflict("Esta produção já foi fechada. Para corrigir os dados, use o histórico."))
             } catch (error: IllegalArgumentException) {
                 setProductionSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Validation(error.message ?: "Quantidade produzida inválida"))
