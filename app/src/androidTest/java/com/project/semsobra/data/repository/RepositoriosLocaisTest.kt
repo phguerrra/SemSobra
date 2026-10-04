@@ -74,7 +74,7 @@ class RepositoriosLocaisTest {
     }
 
     @Test
-    fun fechamentoComItemInexistenteReverteTodasAsAlteracoes() {
+    fun fechamentoComItemInexistentePreservaTodasAsInformacoes() {
         val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
         val producaoId = producoes.salvarProducao(
             ProducaoDia(data = "2026-10-03", diaDaSemana = 6),
@@ -82,7 +82,7 @@ class RepositoriosLocaisTest {
         )
         val itemOriginal = producoes.listarHistorico().single().items.single().item
 
-        assertThrows(IllegalStateException::class.java) {
+        assertThrows(IllegalArgumentException::class.java) {
             producoes.fecharProducao(
                 producaoId,
                 100,

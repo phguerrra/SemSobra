@@ -38,6 +38,9 @@ interface ProducaoDao {
     @Query("SELECT fechada FROM producoes WHERE id = :id LIMIT 1")
     fun estaFechada(id: Long): Boolean?
 
+    @Query("SELECT * FROM itens_producao WHERE producao_id = :producaoId ORDER BY id ASC")
+    fun listarItens(producaoId: Long): List<ItemProducaoEntity>
+
     @Query(
         "UPDATE itens_producao SET quantidade_produzida = :produzida, quantidade_sobra = :sobra, " +
             "acabou_antes_do_fim = :acabou, horario_acabou = :horario " +

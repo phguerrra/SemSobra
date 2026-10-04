@@ -400,13 +400,11 @@ class SemSobraViewModel(
         }
         val editingHistory = production.fechado
 
-        val closingById = closingItems.associateBy(ItemProducao::id)
-        val itemsToSave = production.items.map { display ->
-            val closingItem = closingById[display.item.id] ?: display.item
+        val productionItemsById = production.items.associateBy { it.item.id }
+        val itemsToSave = closingItems.map { closingItem ->
             closingItem.copy(
-                producaoDiaId = productionDayId,
-                alimentoId = display.item.alimentoId,
-                quantidadeProduzida = display.item.quantidadeProduzida,
+                quantidadeProduzida = productionItemsById[closingItem.id]?.item?.quantidadeProduzida
+                    ?: closingItem.quantidadeProduzida,
                 horarioAcabou = closingItem.horarioAcabou
                     ?.trim()
                     ?.takeIf { closingItem.acabouAntesDoFim }

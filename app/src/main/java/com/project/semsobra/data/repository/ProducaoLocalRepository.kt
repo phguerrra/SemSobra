@@ -14,12 +14,14 @@ import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.repository.ProducaoRepository
+import com.project.semsobra.domain.usecase.ValidarItensFechamentoUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class ProducaoLocalRepository(private val database: SemSobraDatabase) : ProducaoRepository {
     private val dao = database.producaoDao()
     private val preparoDao = database.preparoDao()
+    private val validarItensFechamento = ValidarItensFechamentoUseCase()
 
     override fun observarHistorico(): Flow<List<ProductionSummary>> =
         dao.observarHistorico().map(::mapearHistorico)
@@ -74,6 +76,8 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
 
         val eraFechada = dao.estaFechada(producaoId) == true
         database.runInTransaction {
+            val preparosPorItem = dao.listarItens(producaoId).associate { it.id to it.preparoId }
+            validarItensFechamento.executar(producaoId, itens, preparosPorItem)
             check(dao.fecharProducao(producaoId, clientesAtendidos) == 1) {
                 "Produção não encontrada"
             }
