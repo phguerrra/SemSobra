@@ -80,7 +80,6 @@ abstract class SemSobraDatabase : RoomDatabase() {
 
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("PRAGMA defer_foreign_keys = ON")
                 criarTabelasRoom(database)
                 copiarDados(database)
                 database.execSQL("DROP TABLE itens_producao")
@@ -88,7 +87,14 @@ abstract class SemSobraDatabase : RoomDatabase() {
                 database.execSQL("DROP TABLE preparos")
                 database.execSQL("ALTER TABLE preparos_room_new RENAME TO preparos")
                 database.execSQL("ALTER TABLE producoes_room_new RENAME TO producoes")
-                database.execSQL("ALTER TABLE itens_producao_room_new RENAME TO itens_producao")
+                // Cria os vínculos somente após as tabelas pai terem seus nomes definitivos.
+                criarTabelaItensRoom(database)
+                database.execSQL(
+                    "INSERT INTO itens_producao SELECT " +
+                        "id, producao_id, preparo_id, quantidade_produzida, quantidade_sobra, " +
+                        "acabou_antes_do_fim, horario_acabou FROM itens_producao_room_new"
+                )
+                database.execSQL("DROP TABLE itens_producao_room_new")
                 criarIndices(database)
             }
         }
@@ -140,10 +146,23 @@ abstract class SemSobraDatabase : RoomDatabase() {
                     quantidade_produzida REAL NOT NULL,
                     quantidade_sobra REAL NOT NULL,
                     acabou_antes_do_fim INTEGER NOT NULL,
+                    horario_acabou TEXT)"""
+            )
+        }
+
+        private fun criarTabelaItensRoom(database: SupportSQLiteDatabase) {
+            database.execSQL(
+                """CREATE TABLE itens_producao (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    producao_id INTEGER NOT NULL,
+                    preparo_id INTEGER NOT NULL,
+                    quantidade_produzida REAL NOT NULL,
+                    quantidade_sobra REAL NOT NULL,
+                    acabou_antes_do_fim INTEGER NOT NULL,
                     horario_acabou TEXT,
-                    FOREIGN KEY (producao_id) REFERENCES producoes_room_new(id)
+                    FOREIGN KEY (producao_id) REFERENCES producoes(id)
                         ON UPDATE NO ACTION ON DELETE CASCADE,
-                    FOREIGN KEY (preparo_id) REFERENCES preparos_room_new(id)
+                    FOREIGN KEY (preparo_id) REFERENCES preparos(id)
                         ON UPDATE NO ACTION ON DELETE RESTRICT)"""
             )
         }

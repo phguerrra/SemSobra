@@ -1,6 +1,7 @@
 package com.project.semsobra.data.local.room
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
@@ -9,6 +10,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -23,11 +27,15 @@ class SemSobraMigrationTest {
     }
 
     @Test
-    fun migration4To5_preservaPreparosProducoesEItens() {
+    fun migration4To7_preservaPreparosProducoesEItens() {
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(databaseName)
                 .callback(object : SupportSQLiteOpenHelper.Callback(4) {
+                    override fun onConfigure(db: SupportSQLiteDatabase) {
+                        db.setForeignKeyConstraintsEnabled(true)
+                    }
+
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         criarSchemaVersao4(db)
                     }
@@ -40,36 +48,105 @@ class SemSobraMigrationTest {
                 })
                 .build()
         )
-        helper.writableDatabase.apply {
-            execSQL(
-                "INSERT INTO preparos " +
-                    "(id, nome, descricao, unidade_medida, dia_da_semana, ativo) " +
-                    "VALUES (1, 'Arroz', '', 'kg', 1, 1)"
-            )
-            execSQL(
-                "INSERT INTO producoes " +
-                    "(id, data, dia_da_semana, clientes_atendidos, turno, " +
-                    "restaurante_aberto, fechada) " +
-                    "VALUES (1, '2026-09-24', 4, 100, 'ALMOCO', 1, 1)"
-            )
-            execSQL(
-                "INSERT INTO itens_producao " +
-                    "(id, producao_id, preparo_id, quantidade_produzida, " +
-                    "quantidade_sobra, acabou_antes_do_fim, horario_acabou) " +
-                    "VALUES (1, 1, 1, 20.0, 2.0, 0, NULL)"
-            )
+        try {
+            helper.writableDatabase.apply {
+                execSQL(
+                    "INSERT INTO preparos " +
+                        "(id, nome, descricao, unidade_medida, dia_da_semana, ativo) " +
+                        "VALUES (1, 'Arroz', 'Arroz branco', 'kg', 1, 1), " +
+                        "(2, 'Feijão', 'Feijão preto', 'kg', 0, 0)"
+                )
+                execSQL(
+                    "INSERT INTO producoes " +
+                        "(id, data, dia_da_semana, clientes_atendidos, turno, " +
+                        "restaurante_aberto, fechada) " +
+                        "VALUES (1, '2026-09-24', 4, 100, 'ALMOCO', 1, 1), " +
+                        "(2, '2026-09-24', 4, 0, 'JANTAR', 0, 0)"
+                )
+                execSQL(
+                    "INSERT INTO itens_producao " +
+                        "(id, producao_id, preparo_id, quantidade_produzida, " +
+                        "quantidade_sobra, acabou_antes_do_fim, horario_acabou) " +
+                        "VALUES (1, 1, 1, 20.125, 2.25, 1, '13:30'), " +
+                        "(2, 2, 2, 5.5, 0.0, 0, NULL)"
+                )
+            }
+        } finally {
+            helper.close()
         }
-        helper.close()
 
         val migrated = Room.databaseBuilder(context, SemSobraDatabase::class.java, databaseName)
-            .addMigrations(SemSobraDatabase.MIGRATION_4_5)
+            .addMigrations(
+                SemSobraDatabase.MIGRATION_4_5,
+                SemSobraDatabase.MIGRATION_5_6,
+                SemSobraDatabase.MIGRATION_6_7
+            )
             .allowMainThreadQueries()
             .build()
 
-        assertEquals("Arroz", migrated.preparoDao().buscarPorId(1)?.nome)
-        assertEquals(1, migrated.producaoDao().listarHistorico().size)
-        assertEquals(2.0, migrated.producaoDao().listarHistorico().single().quantidadeSobra, 0.0)
-        migrated.close()
+        try {
+            assertEquals(7, migrated.openHelper.writableDatabase.version)
+            assertEquals(
+                PreparoEntity(
+                    id = 1, nome = "Arroz", descricao = "Arroz branco", unidadeMedida = "kg",
+                    diaDaSemana = 1, diasSemanaMask = 1, ativo = true
+                ),
+                migrated.preparoDao().buscarPorId(1)
+            )
+            assertEquals(
+                PreparoEntity(
+                    id = 2, nome = "Feijão", descricao = "Feijão preto", unidadeMedida = "kg",
+                    diaDaSemana = 0, diasSemanaMask = 127, ativo = false
+                ),
+                migrated.preparoDao().buscarPorId(2)
+            )
+            assertEquals(listOf(1L), migrated.preparoDao().listarAtivos().map { it.id })
+
+            val esperado = listOf(
+                HistoricoRow(
+                    producaoId = 1, data = "2026-09-24", producaoDiaDaSemana = 4,
+                    clientesAtendidos = 100, turno = "ALMOCO", restauranteAberto = true,
+                    fechada = true, alteradoEm = null, itemId = 1, preparoId = 1,
+                    quantidadeProduzida = 20.125, quantidadeSobra = 2.25,
+                    acabouAntesDoFim = true, horarioAcabou = "13:30", nome = "Arroz",
+                    descricao = "Arroz branco", unidadeMedida = "kg", preparoDiaDaSemana = 1,
+                    diasSemanaMask = 1
+                ),
+                HistoricoRow(
+                    producaoId = 2, data = "2026-09-24", producaoDiaDaSemana = 4,
+                    clientesAtendidos = 0, turno = "JANTAR", restauranteAberto = false,
+                    fechada = false, alteradoEm = null, itemId = 2, preparoId = 2,
+                    quantidadeProduzida = 5.5, quantidadeSobra = 0.0,
+                    acabouAntesDoFim = false, horarioAcabou = null, nome = "Feijão",
+                    descricao = "Feijão preto", unidadeMedida = "kg", preparoDiaDaSemana = 0,
+                    diasSemanaMask = 127
+                )
+            )
+            assertEquals(
+                esperado.associateBy { it.itemId },
+                migrated.producaoDao().listarHistorico().associateBy { it.itemId }
+            )
+            migrated.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use {
+                assertFalse(it.moveToFirst())
+            }
+            val novoItemId = migrated.producaoDao().inserirItem(
+                ItemProducaoEntity(producaoId = 2, preparoId = 1, quantidadeProduzida = 3.0)
+            )
+            assertTrue(novoItemId > 2)
+            assertEquals(2, migrated.producaoDao().listarItens(2).size)
+            assertThrows(SQLiteConstraintException::class.java) {
+                migrated.producaoDao().inserirItem(
+                    ItemProducaoEntity(producaoId = 999, preparoId = 1, quantidadeProduzida = 3.0)
+                )
+            }
+            assertThrows(SQLiteConstraintException::class.java) {
+                migrated.producaoDao().inserirItem(
+                    ItemProducaoEntity(producaoId = 2, preparoId = 999, quantidadeProduzida = 3.0)
+                )
+            }
+        } finally {
+            migrated.close()
+        }
     }
 
     private fun criarSchemaVersao4(db: SupportSQLiteDatabase) {
