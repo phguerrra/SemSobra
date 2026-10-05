@@ -8,6 +8,7 @@ import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,6 +16,7 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.json.JSONObject
 
 @RunWith(AndroidJUnit4::class)
 class SemSobraMigrationTest {
@@ -139,17 +141,46 @@ class SemSobraMigrationTest {
     }
 
     @Test
+    fun migration2To7_preservaPreparosProducoesEItens() {
+        testarMigracaoComHistorico(2)
+    }
+
+    @Test
+    fun migration3To7_preservaPreparosInativosProducoesEItens() {
+        testarMigracaoComHistorico(3)
+    }
+
+    @Test
     fun migration4To7_preservaPreparosProducoesEItens() {
+        testarMigracaoComHistorico(4)
+    }
+
+    @Test
+    fun migration5To7_preservaPreparosInativosProducoesEItens() {
+        testarMigracaoComHistorico(5)
+    }
+
+    @Test
+    fun migration6To7_preservaHistoricoEDataDeCorrecao() {
+        testarMigracaoComHistorico(6)
+    }
+
+    private fun testarMigracaoComHistorico(versaoInicial: Int) {
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(databaseName)
-                .callback(object : SupportSQLiteOpenHelper.Callback(4) {
+                .callback(object : SupportSQLiteOpenHelper.Callback(versaoInicial) {
                     override fun onConfigure(db: SupportSQLiteDatabase) {
                         db.setForeignKeyConstraintsEnabled(true)
                     }
 
                     override fun onCreate(db: SupportSQLiteDatabase) {
-                        criarSchemaVersao4(db)
+                        when (versaoInicial) {
+                            2, 3 -> criarSchemaVersao2Ou3(db, versaoInicial)
+                            4 -> criarSchemaVersao4(db)
+                            5, 6 -> criarSchemaRoomExportado(db, versaoInicial)
+                            else -> error("Versão sem fixture de histórico: $versaoInicial")
+                        }
                     }
 
                     override fun onUpgrade(
@@ -160,14 +191,25 @@ class SemSobraMigrationTest {
                 })
                 .build()
         )
+        val alteradoEmEsperado = if (versaoInicial == 6) "2026-09-24 14:15:00" else null
         try {
             helper.writableDatabase.apply {
-                execSQL(
-                    "INSERT INTO preparos " +
-                        "(id, nome, descricao, unidade_medida, dia_da_semana, ativo) " +
-                        "VALUES (1, 'Arroz', 'Arroz branco', 'kg', 1, 1), " +
-                        "(2, 'Feijão', 'Feijão preto', 'kg', 0, 0)"
-                )
+                assertEquals(versaoInicial, version)
+                if (versaoInicial == 2) {
+                    execSQL(
+                        "INSERT INTO preparos " +
+                            "(id, nome, descricao, unidade_medida, dia_da_semana) " +
+                            "VALUES (1, 'Arroz', 'Arroz branco', 'kg', 1), " +
+                            "(2, 'Feijão', 'Feijão preto', 'kg', 0)"
+                    )
+                } else {
+                    execSQL(
+                        "INSERT INTO preparos " +
+                            "(id, nome, descricao, unidade_medida, dia_da_semana, ativo) " +
+                            "VALUES (1, 'Arroz', 'Arroz branco', 'kg', 1, 1), " +
+                            "(2, 'Feijão', 'Feijão preto', 'kg', 0, 0)"
+                    )
+                }
                 execSQL(
                     "INSERT INTO producoes " +
                         "(id, data, dia_da_semana, clientes_atendidos, turno, " +
@@ -175,6 +217,12 @@ class SemSobraMigrationTest {
                         "VALUES (1, '2026-09-24', 4, 100, 'ALMOCO', 1, 1), " +
                         "(2, '2026-09-24', 4, 0, 'JANTAR', 0, 0)"
                 )
+                if (alteradoEmEsperado != null) {
+                    execSQL(
+                        "UPDATE producoes SET alterado_em = ? WHERE id = 1",
+                        arrayOf<Any>(alteradoEmEsperado)
+                    )
+                }
                 execSQL(
                     "INSERT INTO itens_producao " +
                         "(id, producao_id, preparo_id, quantidade_produzida, " +
@@ -189,6 +237,8 @@ class SemSobraMigrationTest {
 
         val migrated = Room.databaseBuilder(context, SemSobraDatabase::class.java, databaseName)
             .addMigrations(
+                SemSobraDatabase.MIGRATION_2_3,
+                SemSobraDatabase.MIGRATION_3_4,
                 SemSobraDatabase.MIGRATION_4_5,
                 SemSobraDatabase.MIGRATION_5_6,
                 SemSobraDatabase.MIGRATION_6_7
@@ -196,6 +246,7 @@ class SemSobraMigrationTest {
             .allowMainThreadQueries()
             .build()
 
+        val historicoFinalEsperado: List<HistoricoRow>
         try {
             assertEquals(7, migrated.openHelper.writableDatabase.version)
             assertEquals(
@@ -208,17 +259,20 @@ class SemSobraMigrationTest {
             assertEquals(
                 PreparoEntity(
                     id = 2, nome = "Feijão", descricao = "Feijão preto", unidadeMedida = "kg",
-                    diaDaSemana = 0, diasSemanaMask = 127, ativo = false
+                    diaDaSemana = 0, diasSemanaMask = 127, ativo = versaoInicial == 2
                 ),
                 migrated.preparoDao().buscarPorId(2)
             )
-            assertEquals(listOf(1L), migrated.preparoDao().listarAtivos().map { it.id })
+            assertEquals(
+                if (versaoInicial == 2) listOf(1L, 2L) else listOf(1L),
+                migrated.preparoDao().listarAtivos().map { it.id }
+            )
 
             val esperado = listOf(
                 HistoricoRow(
                     producaoId = 1, data = "2026-09-24", producaoDiaDaSemana = 4,
                     clientesAtendidos = 100, turno = "ALMOCO", restauranteAberto = true,
-                    fechada = true, alteradoEm = null, itemId = 1, preparoId = 1,
+                    fechada = true, alteradoEm = alteradoEmEsperado, itemId = 1, preparoId = 1,
                     quantidadeProduzida = 20.125, quantidadeSobra = 2.25,
                     acabouAntesDoFim = true, horarioAcabou = "13:30", nome = "Arroz",
                     descricao = "Arroz branco", unidadeMedida = "kg", preparoDiaDaSemana = 1,
@@ -246,6 +300,12 @@ class SemSobraMigrationTest {
             )
             assertTrue(novoItemId > 2)
             assertEquals(2, migrated.producaoDao().listarItens(2).size)
+            historicoFinalEsperado = esperado + esperado.first().copy(
+                producaoId = 2, clientesAtendidos = 0, turno = "JANTAR",
+                restauranteAberto = false, fechada = false, alteradoEm = null, itemId = novoItemId,
+                quantidadeProduzida = 3.0, quantidadeSobra = 0.0,
+                acabouAntesDoFim = false, horarioAcabou = null
+            )
             assertThrows(SQLiteConstraintException::class.java) {
                 migrated.producaoDao().inserirItem(
                     ItemProducaoEntity(producaoId = 999, preparoId = 1, quantidadeProduzida = 3.0)
@@ -259,6 +319,46 @@ class SemSobraMigrationTest {
         } finally {
             migrated.close()
         }
+
+        val reopened = Room.databaseBuilder(context, SemSobraDatabase::class.java, databaseName)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            assertEquals(7, reopened.openHelper.writableDatabase.version)
+            assertEquals(versaoInicial == 2, reopened.preparoDao().buscarPorId(2)?.ativo)
+            assertEquals(
+                historicoFinalEsperado.associateBy { it.itemId },
+                reopened.producaoDao().listarHistorico().associateBy { it.itemId }
+            )
+        } finally {
+            reopened.close()
+        }
+    }
+
+    private fun criarSchemaRoomExportado(db: SupportSQLiteDatabase, versao: Int) {
+        val schemaPath = "${SemSobraDatabase::class.java.canonicalName}/$versao.json"
+        val schema = InstrumentationRegistry.getInstrumentation().context.assets
+            .open(schemaPath).bufferedReader().use {
+                JSONObject(it.readText()).getJSONObject("database")
+            }
+        assertEquals(versao, schema.getInt("version"))
+        val entidades = schema.getJSONArray("entities")
+        for (indice in 0 until entidades.length()) {
+            val entidade = entidades.getJSONObject(indice)
+            val tabela = entidade.getString("tableName")
+            db.execSQL(entidade.getString("createSql").replace("\${TABLE_NAME}", tabela))
+            val indices = entidade.getJSONArray("indices")
+            for (indiceTabela in 0 until indices.length()) {
+                db.execSQL(
+                    indices.getJSONObject(indiceTabela).getString("createSql")
+                        .replace("\${TABLE_NAME}", tabela)
+                )
+            }
+        }
+        val setupQueries = schema.getJSONArray("setupQueries")
+        for (indice in 0 until setupQueries.length()) {
+            db.execSQL(setupQueries.getString(indice))
+        }
     }
 
     private fun criarSchemaVersao1(db: SupportSQLiteDatabase) {
@@ -271,6 +371,50 @@ class SemSobraMigrationTest {
                 unidade_medida TEXT NOT NULL,
                 dia_da_semana INTEGER NOT NULL CHECK (dia_da_semana BETWEEN 0 AND 7))"""
         )
+    }
+
+    private fun criarSchemaVersao2Ou3(db: SupportSQLiteDatabase, versao: Int) {
+        // Estruturas originais nos commits da56106 (v2) e a98a08c (v3).
+        val colunaAtivo = if (versao == 3) {
+            ", ativo INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1))"
+        } else {
+            ""
+        }
+        db.execSQL(
+            """CREATE TABLE preparos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                descricao TEXT NOT NULL DEFAULT '',
+                unidade_medida TEXT NOT NULL,
+                dia_da_semana INTEGER NOT NULL CHECK (dia_da_semana BETWEEN 0 AND 7)
+                $colunaAtivo)"""
+        )
+        db.execSQL(
+            """CREATE TABLE producoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT NOT NULL,
+                dia_da_semana INTEGER NOT NULL CHECK (dia_da_semana BETWEEN 1 AND 7),
+                clientes_atendidos INTEGER NOT NULL DEFAULT 0 CHECK (clientes_atendidos >= 0),
+                turno TEXT NOT NULL,
+                restaurante_aberto INTEGER NOT NULL DEFAULT 1 CHECK (restaurante_aberto IN (0, 1)),
+                fechada INTEGER NOT NULL DEFAULT 0 CHECK (fechada IN (0, 1)),
+                UNIQUE (data, turno))"""
+        )
+        db.execSQL(
+            """CREATE TABLE itens_producao (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                producao_id INTEGER NOT NULL,
+                preparo_id INTEGER NOT NULL,
+                quantidade_produzida REAL NOT NULL CHECK (quantidade_produzida >= 0),
+                quantidade_sobra REAL NOT NULL DEFAULT 0
+                    CHECK (quantidade_sobra >= 0 AND quantidade_sobra <= quantidade_produzida),
+                acabou_antes_do_fim INTEGER NOT NULL DEFAULT 0 CHECK (acabou_antes_do_fim IN (0, 1)),
+                horario_acabou TEXT,
+                FOREIGN KEY (producao_id) REFERENCES producoes(id) ON DELETE CASCADE,
+                FOREIGN KEY (preparo_id) REFERENCES preparos(id) ON DELETE RESTRICT,
+                UNIQUE (producao_id, preparo_id))"""
+        )
+        db.execSQL("CREATE INDEX indice_itens_producao_preparo ON itens_producao(preparo_id)")
     }
 
     private fun criarSchemaVersao4(db: SupportSQLiteDatabase) {
