@@ -7,6 +7,8 @@ import com.project.semsobra.domain.repository.ProducaoRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -81,6 +83,32 @@ class ProducaoUseCasesTest {
                 )
             )
         )
+    }
+
+    @Test
+    fun fechamentoComItemRepetidoNaoChamaRepositorio() {
+        val repository = RepositorioFalso()
+        val item = ItemProducao(id = 20, producaoDiaId = 30, alimentoId = 10, quantidadeProduzida = 5.0)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            FecharProducaoUseCase(repository).executar(30, 100, listOf(item, item))
+        }
+
+        assertFalse(repository.fechamentoFoiSalvo)
+        assertFalse(repository.listarHistoricoFoiChamado)
+    }
+
+    @Test
+    fun fechamentoComItemDeOutraProducaoNaoChamaRepositorio() {
+        val repository = RepositorioFalso()
+        val item = ItemProducao(id = 20, producaoDiaId = 31, alimentoId = 10, quantidadeProduzida = 5.0)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            FecharProducaoUseCase(repository).executar(30, 100, listOf(item))
+        }
+
+        assertFalse(repository.fechamentoFoiSalvo)
+        assertFalse(repository.listarHistoricoFoiChamado)
     }
 
     private class RepositorioFalso : ProducaoRepository {
