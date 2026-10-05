@@ -74,8 +74,14 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
         itens: List<ItemProducao>
     ) {
         require(producaoId > 0) { "A produção precisa ter um ID válido" }
-        require(clientesAtendidos > 0) { "Informe os clientes atendidos" }
+        validarDados.validarClientesAtendidos(clientesAtendidos)
         require(itens.isNotEmpty()) { "A produção precisa ter ao menos um item" }
+        itens.forEach { item ->
+            validarDados.validarSobra(
+                item.quantidadeProduzida,
+                item.quantidadeSobra
+            )
+        }
 
         database.runInTransaction {
             val eraFechada = checkNotNull(dao.estaFechada(producaoId)) {

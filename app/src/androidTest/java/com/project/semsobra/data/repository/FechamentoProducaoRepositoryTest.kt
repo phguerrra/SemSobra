@@ -10,6 +10,7 @@ import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.previsao.model.Turno
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
@@ -133,6 +134,93 @@ class FechamentoProducaoRepositoryTest {
         assertEquals(historicoAntes, database.producaoDao().listarHistorico())
     }
 
+    @Test
+    fun clientesInvalidosNaoAlteramProducaoNemItens() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId)
+        clientesInvalidos().forEach { clientes ->
+            assertFechamentoRejeitado(producaoId, lista, clientes)
+        }
+    }
+
+    @Test
+    fun quantidadeProduzidaInvalidaNoSegundoItemPreservaTodosOsDados() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId)
+        quantidadesProduzidasInvalidas().forEach { quantidade ->
+            assertFechamentoRejeitado(
+                producaoId,
+                listOf(lista.first().copy(quantidadeSobra = 1.0), lista.last().copy(quantidadeProduzida = quantidade))
+            )
+        }
+    }
+
+    @Test
+    fun sobraInvalidaNoSegundoItemPreservaTodosOsDados() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId)
+        sobrasInvalidas(lista.last()).forEach { sobra ->
+            assertFechamentoRejeitado(
+                producaoId,
+                listOf(lista.first().copy(quantidadeSobra = 1.0), lista.last().copy(quantidadeSobra = sobra))
+            )
+        }
+    }
+
+    @Test
+    fun correcaoComDadosInvalidosPreservaFechamentoAnteriorEDataDaAlteracao() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId)
+        producoes.fecharProducao(producaoId, 100, lista.map { it.copy(quantidadeSobra = 1.0) })
+        producoes.fecharProducao(producaoId, 110, lista.map { it.copy(quantidadeSobra = 2.0) })
+        assertTrue(!producoes.listarHistorico().single().day.alteradoEm.isNullOrBlank())
+
+        clientesInvalidos().forEach { assertFechamentoRejeitado(producaoId, lista, it) }
+        val segundo = lista.last()
+        val itensInvalidos = quantidadesProduzidasInvalidas().map { segundo.copy(quantidadeProduzida = it) } +
+            sobrasInvalidas(segundo).map { segundo.copy(quantidadeSobra = it) }
+        itensInvalidos.forEach { segundoInvalido ->
+            assertFechamentoRejeitado(
+                producaoId, listOf(lista.first().copy(quantidadeSobra = 3.0), segundoInvalido)
+            )
+        }
+    }
+
+    @Test
+    fun limitesValidosPermitemFechamentoECorrecao() {
+        val producaoId = criarProducao()
+        val quantidadeMaxima = ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE
+        val lista = itens(producaoId).map {
+            it.copy(quantidadeProduzida = quantidadeMaxima, quantidadeSobra = quantidadeMaxima)
+        }
+        producoes.fecharProducao(producaoId, ValidarDadosProducaoUseCase.MAXIMO_CLIENTES, lista)
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        assertEquals(ValidarDadosProducaoUseCase.MAXIMO_CLIENTES, fechado.day.clientesAtendidos)
+        fechado.items.forEach {
+            assertEquals(quantidadeMaxima, it.item.quantidadeProduzida, 0.0)
+            assertEquals(quantidadeMaxima, it.item.quantidadeSobra, 0.0)
+            assertEquals(0.0, it.consumo, 0.0)
+        }
+
+        producoes.fecharProducao(producaoId, 1, lista.map { it.copy(quantidadeSobra = 0.0) })
+        val corrigido = producoes.listarHistorico().single()
+        assertEquals(1, corrigido.day.clientesAtendidos)
+        assertTrue(corrigido.items.all { it.item.quantidadeSobra == 0.0 })
+    }
+
+    private fun clientesInvalidos() = listOf(-1, 0, ValidarDadosProducaoUseCase.MAXIMO_CLIENTES + 1)
+
+    private fun quantidadesProduzidasInvalidas() = listOf(
+        Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
+        -1.0, 0.0, ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
+    )
+
+    private fun sobrasInvalidas(item: ItemProducao) = listOf(
+        Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
+        -1.0, item.quantidadeProduzida + 1.0, ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
+    )
+
     private fun criarProducao(turno: Turno = Turno.ALMOCO): Long = producoes.salvarProducao(
         ProducaoDia(data = "2026-10-04", diaDaSemana = 7, turno = turno),
         linkedMapOf(arrozId to 10.0, feijaoId to 5.0)
@@ -141,10 +229,10 @@ class FechamentoProducaoRepositoryTest {
     private fun itens(producaoId: Long): List<ItemProducao> =
         producoes.listarHistorico().single { it.day.id == producaoId }.items.map { it.item }
 
-    private fun assertFechamentoRejeitado(producaoId: Long, lista: List<ItemProducao>) {
+    private fun assertFechamentoRejeitado(producaoId: Long, lista: List<ItemProducao>, clientes: Int = 999) {
         val historicoAntes = database.producaoDao().listarHistorico()
         assertThrows(IllegalArgumentException::class.java) {
-            producoes.fecharProducao(producaoId, 999, lista)
+            producoes.fecharProducao(producaoId, clientes, lista)
         }
         assertEquals(historicoAntes, database.producaoDao().listarHistorico())
     }
