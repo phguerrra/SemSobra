@@ -27,6 +27,118 @@ class SemSobraMigrationTest {
     }
 
     @Test
+    fun migration1To7_preservaPreparosEPermiteNovaProducao() {
+        val preparosEsperados = (0..7).map { dia ->
+            PreparoEntity(
+                id = (dia + 1) * 10L,
+                nome = "Preparo $dia",
+                descricao = "Receita do dia $dia",
+                unidadeMedida = if (dia % 2 == 0) "kg" else "un",
+                diaDaSemana = dia,
+                diasSemanaMask = if (dia == 0) 127 else 1 shl (dia - 1),
+                ativo = true
+            )
+        }
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(databaseName)
+                .callback(object : SupportSQLiteOpenHelper.Callback(1) {
+                    override fun onConfigure(db: SupportSQLiteDatabase) {
+                        db.setForeignKeyConstraintsEnabled(true)
+                    }
+
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        criarSchemaVersao1(db)
+                    }
+
+                    override fun onUpgrade(
+                        db: SupportSQLiteDatabase,
+                        oldVersion: Int,
+                        newVersion: Int
+                    ) = Unit
+                })
+                .build()
+        )
+        try {
+            val legacy = helper.writableDatabase
+            assertEquals(1, legacy.version)
+            preparosEsperados.forEach { preparo ->
+                legacy.execSQL(
+                    "INSERT INTO preparos " +
+                        "(id, nome, descricao, unidade_medida, dia_da_semana) " +
+                        "VALUES (?, ?, ?, ?, ?)",
+                    arrayOf<Any>(
+                        preparo.id, preparo.nome, preparo.descricao,
+                        preparo.unidadeMedida, preparo.diaDaSemana
+                    )
+                )
+            }
+        } finally {
+            helper.close()
+        }
+
+        val migrated = Room.databaseBuilder(context, SemSobraDatabase::class.java, databaseName)
+            .addMigrations(
+                SemSobraDatabase.MIGRATION_1_2,
+                SemSobraDatabase.MIGRATION_2_3,
+                SemSobraDatabase.MIGRATION_3_4,
+                SemSobraDatabase.MIGRATION_4_5,
+                SemSobraDatabase.MIGRATION_5_6,
+                SemSobraDatabase.MIGRATION_6_7
+            )
+            .allowMainThreadQueries()
+            .build()
+
+        val historicoEsperado: List<HistoricoRow>
+        try {
+            assertEquals(7, migrated.openHelper.writableDatabase.version)
+            assertEquals(preparosEsperados, migrated.preparoDao().listarAtivos())
+            preparosEsperados.forEach { preparo ->
+                assertEquals(preparo, migrated.preparoDao().buscarPorId(preparo.id))
+            }
+            assertTrue(migrated.producaoDao().listarHistorico().isEmpty())
+
+            val producaoId = migrated.producaoDao().inserirProducao(
+                ProducaoEntity(data = "2026-10-05", diaDaSemana = 1, turno = "ALMOCO")
+            )
+            val item = ItemProducaoEntity(
+                producaoId = producaoId, preparoId = preparosEsperados.first().id,
+                quantidadeProduzida = 2.5
+            )
+            val itemId = migrated.producaoDao().inserirItem(item)
+            assertEquals(listOf(item.copy(id = itemId)), migrated.producaoDao().listarItens(producaoId))
+            historicoEsperado = listOf(
+                HistoricoRow(
+                    producaoId = producaoId, data = "2026-10-05", producaoDiaDaSemana = 1,
+                    clientesAtendidos = 0, turno = "ALMOCO", restauranteAberto = true,
+                    fechada = false, alteradoEm = null, itemId = itemId, preparoId = 10,
+                    quantidadeProduzida = 2.5, quantidadeSobra = 0.0,
+                    acabouAntesDoFim = false, horarioAcabou = null, nome = "Preparo 0",
+                    descricao = "Receita do dia 0", unidadeMedida = "kg", preparoDiaDaSemana = 0,
+                    diasSemanaMask = 127
+                )
+            )
+            assertEquals(historicoEsperado, migrated.producaoDao().listarHistorico())
+            migrated.openHelper.writableDatabase.query("PRAGMA foreign_key_check").use {
+                assertFalse(it.moveToFirst())
+            }
+        } finally {
+            migrated.close()
+        }
+
+        val reopened = Room.databaseBuilder(context, SemSobraDatabase::class.java, databaseName)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            assertEquals(7, reopened.openHelper.writableDatabase.version)
+            assertEquals(preparosEsperados, reopened.preparoDao().listarAtivos())
+            assertEquals(historicoEsperado, reopened.producaoDao().listarHistorico())
+        } finally {
+            reopened.close()
+        }
+    }
+
+    @Test
     fun migration4To7_preservaPreparosProducoesEItens() {
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
@@ -147,6 +259,18 @@ class SemSobraMigrationTest {
         } finally {
             migrated.close()
         }
+    }
+
+    private fun criarSchemaVersao1(db: SupportSQLiteDatabase) {
+        // Estrutura original do SQLiteOpenHelper no commit 6af5220.
+        db.execSQL(
+            """CREATE TABLE preparos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                descricao TEXT NOT NULL DEFAULT '',
+                unidade_medida TEXT NOT NULL,
+                dia_da_semana INTEGER NOT NULL CHECK (dia_da_semana BETWEEN 0 AND 7))"""
+        )
     }
 
     private fun criarSchemaVersao4(db: SupportSQLiteDatabase) {
