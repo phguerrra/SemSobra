@@ -6,15 +6,15 @@ import com.project.semsobra.domain.repository.ProducaoRepository
 
 class FecharProducaoUseCase(
     private val repository: ProducaoRepository,
-    private val validarDados: ValidarDadosProducaoUseCase = ValidarDadosProducaoUseCase()
+    private val validarDados: ValidarDadosProducaoUseCase = ValidarDadosProducaoUseCase(),
+    private val validarItens: ValidarItensFechamentoUseCase = ValidarItensFechamentoUseCase()
 ) {
     fun executar(
         producaoId: Long,
         clientesAtendidos: Int,
         itens: List<ItemProducao>
     ): List<ProductionSummary> {
-        require(producaoId > 0) { "A produção precisa ter um ID válido" }
-        require(itens.isNotEmpty()) { "A produção precisa ter ao menos um item" }
+        validarItens.validarIdentificacao(producaoId, itens)
         validarDados.validarClientesAtendidos(clientesAtendidos)
         itens.forEach { item ->
             validarDados.validarFechamentoDoItem(
