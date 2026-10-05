@@ -11,6 +11,7 @@ import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.usecase.ExcluirPreparoUseCase
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -266,4 +267,65 @@ class RepositoriosLocaisTest {
         assertNull(database.producaoDao().buscarId(producao.data, producao.turno.name))
         assertTrue(producoes.listarHistorico().isEmpty())
     }
+
+    @Test
+    fun quantidadeInvalidaNaoCriaProducaoParcial() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val outroPreparoId = preparos.inserir(Preparo("Feijão", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
+
+        quantidadesInvalidas().forEach { quantidade ->
+            assertThrows(IllegalArgumentException::class.java) {
+                producoes.salvarProducao(
+                    producao, linkedMapOf(preparoId to 10.0, outroPreparoId to quantidade)
+                )
+            }
+            assertNull(database.producaoDao().buscarId(producao.data, producao.turno.name))
+            assertTrue(database.producaoDao().listarHistorico().isEmpty())
+        }
+    }
+
+    @Test
+    fun quantidadeInvalidaPreservaProducaoAbertaExistente() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val outroPreparoId = preparos.inserir(Preparo("Feijão", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
+        val producaoId = producoes.salvarProducao(producao, mapOf(preparoId to 10.0))
+        val historicoAntes = database.producaoDao().listarHistorico()
+
+        quantidadesInvalidas().forEach { quantidade ->
+            assertThrows(IllegalArgumentException::class.java) {
+                producoes.salvarProducao(
+                    producao.copy(restauranteAberto = false),
+                    linkedMapOf(preparoId to 20.0, outroPreparoId to quantidade)
+                )
+            }
+            assertEquals(producaoId, database.producaoDao().buscarId(producao.data, producao.turno.name))
+            assertEquals(historicoAntes, database.producaoDao().listarHistorico())
+        }
+    }
+
+    @Test
+    fun quantidadeNoLimiteMaximoPodeSerSalva() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        producoes.salvarProducao(
+            ProducaoDia(data = "2026-10-03", diaDaSemana = 6),
+            mapOf(preparoId to ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE)
+        )
+
+        assertEquals(
+            ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE,
+            producoes.listarHistorico().single().items.single().item.quantidadeProduzida,
+            0.0
+        )
+    }
+
+    private fun quantidadesInvalidas() = listOf(
+        Double.NaN,
+        Double.POSITIVE_INFINITY,
+        Double.NEGATIVE_INFINITY,
+        -1.0,
+        0.0,
+        ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
+    )
 }

@@ -15,6 +15,7 @@ import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.repository.ProducaoRepository
 import com.project.semsobra.domain.usecase.ValidarItensFechamentoUseCase
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -22,6 +23,7 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
     private val dao = database.producaoDao()
     private val preparoDao = database.preparoDao()
     private val validarItensFechamento = ValidarItensFechamentoUseCase()
+    private val validarDados = ValidarDadosProducaoUseCase()
 
     override fun observarHistorico(): Flow<List<ProductionSummary>> =
         dao.observarHistorico().map(::mapearHistorico)
@@ -33,9 +35,10 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
         require(quantidadesPorPreparo.isNotEmpty()) {
             "A produção precisa ter ao menos um item"
         }
-        require(quantidadesPorPreparo.all { (preparoId, quantidade) ->
-            preparoId > 0 && quantidade > 0.0
-        }) { "Os preparos e as quantidades da produção precisam ser válidos" }
+        require(quantidadesPorPreparo.keys.all { it > 0 }) {
+            "Os preparos da produção precisam ser válidos"
+        }
+        quantidadesPorPreparo.values.forEach(validarDados::validarQuantidadeProduzida)
 
         var resultado = 0L
         database.runInTransaction {
