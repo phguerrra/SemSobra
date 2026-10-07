@@ -68,6 +68,30 @@ class ProducaoUseCasesTest {
         assertEquals(repository.historico, resultado)
     }
 
+    @Test
+    fun salvarQuantidadeQueArredondaParaZeroNaoChamaRepositorio() {
+        val repository = RepositorioFalso()
+        assertThrows(IllegalArgumentException::class.java) {
+            SalvarProducaoUseCase(repository).executar(
+                ProducaoDia(data = "2026-09-25", diaDaSemana = 5),
+                mapOf(10L to 0.0001)
+            )
+        }
+        assertEquals(null, repository.producaoSalva)
+        assertFalse(repository.listarHistoricoFoiChamado)
+    }
+
+    @Test
+    fun fecharQuantidadeQueArredondaParaZeroNaoChamaRepositorio() {
+        val repository = RepositorioFalso()
+        val item = ItemProducao(id = 20, producaoDiaId = 30, alimentoId = 10, quantidadeProduzida = 0.0001)
+        assertThrows(IllegalArgumentException::class.java) {
+            FecharProducaoUseCase(repository).executar(30, 100, listOf(item))
+        }
+        assertFalse(repository.fechamentoFoiSalvo)
+        assertFalse(repository.listarHistoricoFoiChamado)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun fecharProducaoRejeitaSobraMaiorQueProduzido() {
         FecharProducaoUseCase(RepositorioFalso()).executar(

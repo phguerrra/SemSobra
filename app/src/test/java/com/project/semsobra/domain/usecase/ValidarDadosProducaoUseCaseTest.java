@@ -3,6 +3,7 @@ package com.project.semsobra.domain.usecase;
 import org.junit.Test;
 
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 public class ValidarDadosProducaoUseCaseTest {
 
@@ -11,6 +12,33 @@ public class ValidarDadosProducaoUseCaseTest {
     @Test
     public void deveAceitarQuantidadeProduzidaValida() {
         useCase.validarQuantidadeProduzida(25.5);
+    }
+
+    @Test
+    public void deveRejeitarQuantidadePositivaQueArredondaParaZero() {
+        for (double quantidade : new double[] {Double.MIN_VALUE, 0.0001, Math.nextDown(0.0005)}) {
+            IllegalArgumentException erro = assertThrows(
+                    IllegalArgumentException.class,
+                    () -> useCase.validarQuantidadeProduzida(quantidade)
+            );
+            assertTrue(erro.getMessage().contains("arredondar para 3 casas decimais"));
+        }
+    }
+
+    @Test
+    public void deveAceitarQuantidadeQueArredondaParaMenorValorPositivo() {
+        useCase.validarQuantidadeProduzida(0.0005);
+        useCase.validarQuantidadeProduzida(0.001);
+    }
+
+    @Test
+    public void deveValidarArredondamentoNoFechamentoSemProibirSobraZero() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> useCase.validarFechamentoDoItem(0.0001, 0.0, false, null)
+        );
+        useCase.validarFechamentoDoItem(0.0005, 0.0, false, null);
+        useCase.validarFechamentoDoItem(1.0, 0.0001, false, null);
     }
 
     @Test

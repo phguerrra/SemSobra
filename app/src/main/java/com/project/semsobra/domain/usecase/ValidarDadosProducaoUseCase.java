@@ -1,5 +1,7 @@
 package com.project.semsobra.domain.usecase;
 
+import com.project.semsobra.domain.model.QuantityPolicy;
+
 import java.util.regex.Pattern;
 
 public final class ValidarDadosProducaoUseCase {
@@ -16,6 +18,12 @@ public final class ValidarDadosProducaoUseCase {
         if (quantidade > MAXIMA_QUANTIDADE) {
             throw new IllegalArgumentException(
                     "A quantidade produzida não pode ultrapassar " + MAXIMA_QUANTIDADE
+            );
+        }
+        if (QuantityPolicy.INSTANCE.normalize(quantidade, QuantityPolicy.STORAGE_SCALE) <= 0.0) {
+            throw new IllegalArgumentException(
+                    "A quantidade produzida precisa ser maior que zero após arredondar para "
+                            + QuantityPolicy.STORAGE_SCALE + " casas decimais"
             );
         }
     }
