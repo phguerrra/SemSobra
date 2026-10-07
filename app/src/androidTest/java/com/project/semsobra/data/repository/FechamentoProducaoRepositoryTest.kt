@@ -259,8 +259,25 @@ class FechamentoProducaoRepositoryTest {
 
     private fun quantidadesProduzidasInvalidas() = listOf(
         Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
-        -1.0, 0.0, ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
+        -1.0, 0.0, Double.MIN_VALUE, 0.0001, Math.nextDown(0.0005),
+        ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
     )
+
+    @Test
+    fun fechamentoAceitaQuantidadeQueArredondaParaMenorValorPositivoESobraZero() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId).map { it.copy(quantidadeProduzida = 0.0005, quantidadeSobra = 0.0) }
+        producoes.fecharProducao(producaoId, 1, lista)
+
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        fechado.items.forEach {
+            assertEquals(0.001, it.item.quantidadeProduzida, 0.0)
+            assertEquals(0.0, it.item.quantidadeSobra, 0.0)
+            assertEquals(0.001, it.consumo, 0.0)
+        }
+        assertTrue(database.producaoDao().listarHistorico().all { it.quantidadeProduzida == 0.001 })
+    }
 
     private fun sobrasInvalidas(item: ItemProducao) = listOf(
         Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,

@@ -326,6 +326,25 @@ class RepositoriosLocaisTest {
         Double.NEGATIVE_INFINITY,
         -1.0,
         0.0,
+        Double.MIN_VALUE,
+        0.0001,
+        Math.nextDown(0.0005),
         ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
     )
+
+    @Test
+    fun menorQuantidadeAposArredondamentoPodeSerSalvaEFechada() {
+        val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val producaoId = producoes.salvarProducao(
+            ProducaoDia(data = "2026-10-03", diaDaSemana = 6), mapOf(preparoId to 0.0005)
+        )
+        val item = producoes.listarHistorico().single().items.single().item
+        assertEquals(0.001, item.quantidadeProduzida, 0.0)
+        assertEquals(0.001, database.producaoDao().listarHistorico().single().quantidadeProduzida, 0.0)
+
+        producoes.fecharProducao(producaoId, 1, listOf(item))
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        assertEquals(0.001, fechado.items.single().consumo, 0.0)
+    }
 }
