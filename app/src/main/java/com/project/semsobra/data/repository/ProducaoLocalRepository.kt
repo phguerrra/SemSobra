@@ -77,9 +77,11 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
         validarDados.validarClientesAtendidos(clientesAtendidos)
         require(itens.isNotEmpty()) { "A produção precisa ter ao menos um item" }
         itens.forEach { item ->
-            validarDados.validarSobra(
+            validarDados.validarFechamentoDoItem(
                 item.quantidadeProduzida,
-                item.quantidadeSobra
+                item.quantidadeSobra,
+                item.acabouAntesDoFim,
+                item.horarioAcabou
             )
         }
 

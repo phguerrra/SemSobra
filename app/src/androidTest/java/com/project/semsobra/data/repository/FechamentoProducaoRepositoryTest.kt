@@ -13,6 +13,7 @@ import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -168,6 +169,21 @@ class FechamentoProducaoRepositoryTest {
     }
 
     @Test
+    fun horarioObrigatorioInvalidoNoSegundoItemPreservaTodosOsDados() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId)
+        horariosInvalidos().forEach { horario ->
+            assertFechamentoRejeitado(
+                producaoId,
+                listOf(
+                    lista.first().copy(quantidadeSobra = 1.0),
+                    lista.last().copy(acabouAntesDoFim = true, horarioAcabou = horario)
+                )
+            )
+        }
+    }
+
+    @Test
     fun correcaoComDadosInvalidosPreservaFechamentoAnteriorEDataDaAlteracao() {
         val producaoId = criarProducao()
         val lista = itens(producaoId)
@@ -178,7 +194,8 @@ class FechamentoProducaoRepositoryTest {
         clientesInvalidos().forEach { assertFechamentoRejeitado(producaoId, lista, it) }
         val segundo = lista.last()
         val itensInvalidos = quantidadesProduzidasInvalidas().map { segundo.copy(quantidadeProduzida = it) } +
-            sobrasInvalidas(segundo).map { segundo.copy(quantidadeSobra = it) }
+            sobrasInvalidas(segundo).map { segundo.copy(quantidadeSobra = it) } +
+            horariosInvalidos().map { segundo.copy(acabouAntesDoFim = true, horarioAcabou = it) }
         itensInvalidos.forEach { segundoInvalido ->
             assertFechamentoRejeitado(
                 producaoId, listOf(lista.first().copy(quantidadeSobra = 3.0), segundoInvalido)
@@ -209,6 +226,35 @@ class FechamentoProducaoRepositoryTest {
         assertTrue(corrigido.items.all { it.item.quantidadeSobra == 0.0 })
     }
 
+    @Test
+    fun horariosValidosNosLimitesSaoSalvosSemEspacos() {
+        val producaoId = criarProducao()
+        val lista = itens(producaoId)
+        producoes.fecharProducao(
+            producaoId, 100,
+            listOf(
+                lista.first().copy(acabouAntesDoFim = true, horarioAcabou = " 00:00 "),
+                lista.last().copy(acabouAntesDoFim = true, horarioAcabou = " 23:59 ")
+            )
+        )
+
+        val salvos = itens(producaoId).associateBy { it.id }
+        assertEquals("00:00", salvos.getValue(lista.first().id).horarioAcabou)
+        assertEquals("23:59", salvos.getValue(lista.last().id).horarioAcabou)
+        assertTrue(salvos.values.all { it.acabouAntesDoFim })
+    }
+
+    @Test
+    fun horarioNaoUsadoEIgnoradoQuandoPreparoNaoAcabouAntesDoFim() {
+        val producaoId = criarProducao()
+        producoes.fecharProducao(
+            producaoId, 100,
+            itens(producaoId).map { it.copy(acabouAntesDoFim = false, horarioAcabou = "horario antigo") }
+        )
+
+        itens(producaoId).forEach { assertNull(it.horarioAcabou) }
+    }
+
     private fun clientesInvalidos() = listOf(-1, 0, ValidarDadosProducaoUseCase.MAXIMO_CLIENTES + 1)
 
     private fun quantidadesProduzidasInvalidas() = listOf(
@@ -220,6 +266,8 @@ class FechamentoProducaoRepositoryTest {
         Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
         -1.0, item.quantidadeProduzida + 1.0, ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE + 1.0
     )
+
+    private fun horariosInvalidos(): List<String?> = listOf(null, "", " ", "24:00", "12:60", "9:30", "abc")
 
     private fun criarProducao(turno: Turno = Turno.ALMOCO): Long = producoes.salvarProducao(
         ProducaoDia(data = "2026-10-04", diaDaSemana = 7, turno = turno),
