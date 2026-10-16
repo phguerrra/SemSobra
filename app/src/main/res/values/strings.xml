@@ -1,3 +1,51 @@
 <resources>
     <string name="app_name">SemSobra</string>
+
+    <!-- Ações e campos compartilhados pelas telas de produção e fechamento. -->
+    <string name="action_go_home">Ir para início</string>
+    <string name="action_go_closing">Ir para fechamento</string>
+    <string name="action_save_production">Salvar produção</string>
+    <string name="action_save_closing">Salvar fechamento</string>
+    <string name="status_saving">Salvando…</string>
+    <string name="status_closed">Fechado</string>
+    <string name="status_open">Aberto</string>
+    <string name="label_customers_served">Clientes atendidos</string>
+    <string name="label_quantity_produced">Quantidade produzida (%1$s)</string>
+    <string name="label_leftover">Sobra (%1$s)</string>
+    <string name="quantity_produced_summary">Produzido: %1$s %2$s</string>
+    <string name="label_ran_out_early">Acabou antes do fim</string>
+    <string name="label_ran_out_time">Horário em que acabou</string>
+    <string name="hint_quantity">Ex.: 8,5</string>
+    <string name="hint_ran_out_time">Ex.: 13:40</string>
+    <string name="error_invalid_number">Informe um número válido</string>
+    <string name="error_invalid_integer">Informe um número inteiro válido</string>
+
+    <!-- Dias na ordem ISO: segunda-feira a domingo. -->
+    <string-array name="weekdays">
+        <item>segunda-feira</item>
+        <item>terça-feira</item>
+        <item>quarta-feira</item>
+        <item>quinta-feira</item>
+        <item>sexta-feira</item>
+        <item>sábado</item>
+        <item>domingo</item>
+    </string-array>
+
+    <plurals name="preparation_count">
+        <item quantity="one">%1$d preparo</item>
+        <item quantity="other">%1$d preparos</item>
+    </plurals>
+
+    <!-- Produção do dia. -->
+    <string name="production_saved_title">Produção salva</string>
+    <string name="production_saved_message">A produção de hoje foi registrada. Qual é a próxima etapa?</string>
+    <string name="production_today_title">Produção de hoje</string>
+    <string name="production_today_description">Cardápio de %1$s. Informe a quantidade preparada de cada item.</string>
+    <string name="production_empty_menu">Nenhum preparo foi cadastrado para %1$s.</string>
+
+    <!-- Fechamento. -->
+    <string name="closing_empty">Nenhuma produção registrada para fechar.</string>
+    <string name="closing_title">Fechamento do buffet</string>
+    <string name="closing_description">Informe clientes, a sobra de cada preparo e faltas antes do fim do atendimento.</string>
+    <string name="closing_selected_production">Produção selecionada</string>
 </resources>

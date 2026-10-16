@@ -34,9 +34,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.project.semsobra.R
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.components.EmptyState
@@ -70,6 +73,8 @@ fun ClosingScreen(
     val leftoverErrors = remember { mutableStateMapOf<Long, String>() }
     val timeErrors = remember { mutableStateMapOf<Long, String>() }
     val validator = remember { ValidarDadosProducaoUseCase() }
+    val invalidNumberMessage = stringResource(R.string.error_invalid_number)
+    val invalidIntegerMessage = stringResource(R.string.error_invalid_integer)
 
     LaunchedEffect(selected?.day?.id) {
         selected?.let { summary ->
@@ -101,16 +106,16 @@ fun ClosingScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (summaries.isEmpty()) {
-            item { EmptyState("Nenhuma produção registrada para fechar.") }
+            item { EmptyState(stringResource(R.string.closing_empty)) }
         } else {
             item {
                 HeaderCard(
-                    title = "Fechamento do buffet",
+                    title = stringResource(R.string.closing_title),
                     value = selected?.day?.data?.let(::formatDate).orEmpty(),
-                    subtitle = "Informe clientes, a sobra de cada preparo e faltas antes do fim do atendimento."
+                    subtitle = stringResource(R.string.closing_description)
                 )
             }
-            item { SectionTitle("Produção selecionada") }
+            item { SectionTitle(stringResource(R.string.closing_selected_production)) }
             items(summaries, key = { "production-${it.day.id}" }) { summary ->
                 ProductionSelectorCard(
                     summary = summary,
@@ -125,7 +130,7 @@ fun ClosingScreen(
                         clientes = it
                         clientesErro = null
                     },
-                    label = { Text("Clientes atendidos") },
+                    label = { Text(stringResource(R.string.label_customers_served)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     isError = clientesErro != null,
@@ -166,7 +171,7 @@ fun ClosingScreen(
                         selected?.let { summary ->
                             val clientesAtendidos = clientes.toIntOrNull()
                             clientesErro = if (clientesAtendidos == null) {
-                                "Informe um número inteiro válido"
+                                invalidIntegerMessage
                             } else {
                                 runCatching { validator.validarClientesAtendidos(clientesAtendidos) }
                                     .exceptionOrNull()
@@ -181,7 +186,7 @@ fun ClosingScreen(
                                 val leftover = parseDoubleOrNull(leftovers[itemId].orEmpty())
 
                                 if (leftover == null) {
-                                    novosErrosDeSobra[itemId] = "Informe um número válido"
+                                    novosErrosDeSobra[itemId] = invalidNumberMessage
                                 } else {
                                     runCatching {
                                         validator.validarSobra(display.item.quantidadeProduzida, leftover)
@@ -235,9 +240,9 @@ fun ClosingScreen(
                             strokeWidth = 2.dp
                         )
                         androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-                        Text("Salvando...")
+                        Text(stringResource(R.string.status_saving))
                     } else {
-                        Text("Salvar fechamento")
+                        Text(stringResource(R.string.action_save_closing))
                     }
                 }
             }
@@ -267,12 +272,15 @@ private fun ProductionSelectorCard(summary: ProductionSummary, selected: Boolean
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(formatDate(summary.day.data), fontWeight = FontWeight.Bold)
-                Text("${summary.items.size} preparo(s)", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    pluralStringResource(R.plurals.preparation_count, summary.items.size, summary.items.size),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             FilterChip(
                 selected = selected,
                 onClick = onClick,
-                label = { Text(if (summary.fechado) "Fechado" else "Aberto") }
+                label = { Text(stringResource(if (summary.fechado) R.string.status_closed else R.string.status_open)) }
             )
         }
     }
@@ -308,12 +316,18 @@ private fun ClosingItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text("Produzido: ${formatQuantity(display.item.quantidadeProduzida)} ${display.food.unidadeMedida}")
+            Text(
+                stringResource(
+                    R.string.quantity_produced_summary,
+                    formatQuantity(display.item.quantidadeProduzida),
+                    display.food.unidadeMedida
+                )
+            )
             HorizontalDivider()
             OutlinedTextField(
                 value = leftover,
                 onValueChange = onLeftoverChange,
-                label = { Text("Sobra (${display.food.unidadeMedida})") },
+                label = { Text(stringResource(R.string.label_leftover, display.food.unidadeMedida)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 isError = leftoverError != null,
@@ -322,14 +336,14 @@ private fun ClosingItemCard(
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = ranOut, onCheckedChange = onRanOutChange)
-                Text("Acabou antes do fim")
+                Text(stringResource(R.string.label_ran_out_early))
             }
             if (ranOut) {
                 OutlinedTextField(
                     value = time,
                     onValueChange = onTimeChange,
-                    label = { Text("Horário em que acabou") },
-                    placeholder = { Text("Ex.: 13:40") },
+                    label = { Text(stringResource(R.string.label_ran_out_time)) },
+                    placeholder = { Text(stringResource(R.string.hint_ran_out_time)) },
                     singleLine = true,
                     isError = timeError != null,
                     supportingText = timeError?.let { message -> { Text(message) } },

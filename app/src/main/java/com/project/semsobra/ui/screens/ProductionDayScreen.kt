@@ -36,16 +36,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.project.semsobra.R
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.util.formatDate
-import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.parseDoubleOrNull
 import java.time.LocalDate
 
@@ -62,17 +64,19 @@ fun ProductionDayScreen(
     val errors = remember { mutableStateMapOf<Long, String>() }
     val validator = remember { ValidarDadosProducaoUseCase() }
     val today = LocalDate.now()
+    val todayName = stringArrayResource(R.array.weekdays)[today.dayOfWeek.value - 1]
+    val invalidNumberMessage = stringResource(R.string.error_invalid_number)
 
     if (saveStatus == SaveStatus.SUCCESS) {
         AlertDialog(
             onDismissRequest = {},
-            title = { Text("Produção salva") },
-            text = { Text("A produção de hoje foi registrada. Qual é a próxima etapa?") },
+            title = { Text(stringResource(R.string.production_saved_title)) },
+            text = { Text(stringResource(R.string.production_saved_message)) },
             dismissButton = {
-                TextButton(onClick = onGoHome) { Text("Ir para início") }
+                TextButton(onClick = onGoHome) { Text(stringResource(R.string.action_go_home)) }
             },
             confirmButton = {
-                Button(onClick = onGoToClosing) { Text("Ir para fechamento") }
+                Button(onClick = onGoToClosing) { Text(stringResource(R.string.action_go_closing)) }
             }
         )
     }
@@ -84,13 +88,13 @@ fun ProductionDayScreen(
     ) {
         item {
             HeaderCard(
-                title = "Produção de hoje",
+                title = stringResource(R.string.production_today_title),
                 value = formatDate(today.toString()),
-                subtitle = "Cardápio de ${dayName(today.dayOfWeek.value)}. Informe a quantidade preparada de cada item."
+                subtitle = stringResource(R.string.production_today_description, todayName)
             )
         }
         if (foods.isEmpty()) {
-            item { EmptyState("Nenhum preparo foi cadastrado para ${dayName(today.dayOfWeek.value)}.") }
+            item { EmptyState(stringResource(R.string.production_empty_menu, todayName)) }
         } else {
             items(foods, key = { it.id }) { food ->
                 ProductionInputCard(
@@ -111,7 +115,7 @@ fun ProductionDayScreen(
                         quantities.filterValues(String::isNotBlank).forEach { (foodId, value) ->
                             val quantity = parseDoubleOrNull(value)
                             if (quantity == null) {
-                                currentErrors[foodId] = "Informe um número válido"
+                                currentErrors[foodId] = invalidNumberMessage
                             } else {
                                 val error = runCatching {
                                     validator.validarQuantidadeProduzida(quantity)
@@ -138,9 +142,9 @@ fun ProductionDayScreen(
                             strokeWidth = 2.dp
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Salvando...")
+                        Text(stringResource(R.string.status_saving))
                     } else {
-                        Text("Salvar produção")
+                        Text(stringResource(R.string.action_save_production))
                     }
                 }
             }
@@ -185,8 +189,8 @@ private fun ProductionInputCard(
             OutlinedTextField(
                 value = value,
                 onValueChange = onValueChange,
-                label = { Text("Quantidade produzida (${food.unidadeMedida})") },
-                placeholder = { Text("Ex.: 8,5") },
+                label = { Text(stringResource(R.string.label_quantity_produced, food.unidadeMedida)) },
+                placeholder = { Text(stringResource(R.string.hint_quantity)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 isError = error != null,
