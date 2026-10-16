@@ -51,6 +51,8 @@ import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.formatQuantity
+import com.project.semsobra.ui.util.isDecimalInput
+import com.project.semsobra.ui.util.isIntegerInput
 import com.project.semsobra.ui.util.parseDoubleOrNull
 
 @Composable
@@ -127,8 +129,10 @@ fun ClosingScreen(
                 OutlinedTextField(
                     value = clientes,
                     onValueChange = {
-                        clientes = it
-                        clientesErro = null
+                        if (isIntegerInput(it)) {
+                            clientes = it
+                            clientesErro = null
+                        }
                     },
                     label = { Text(stringResource(R.string.label_customers_served)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -326,7 +330,7 @@ private fun ClosingItemCard(
             HorizontalDivider()
             OutlinedTextField(
                 value = leftover,
-                onValueChange = onLeftoverChange,
+                onValueChange = { if (isDecimalInput(it)) onLeftoverChange(it) },
                 label = { Text(stringResource(R.string.label_leftover, display.food.unidadeMedida)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,

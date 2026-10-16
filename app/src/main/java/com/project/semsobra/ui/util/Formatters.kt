@@ -7,6 +7,13 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+private val decimalInputPattern = Regex("[0-9]*(?:[.,][0-9]*)?")
+
+// Aceita estados intermediários de digitação; a validação do valor ocorre ao salvar.
+fun isDecimalInput(value: String): Boolean = decimalInputPattern.matches(value)
+
+fun isIntegerInput(value: String): Boolean = value.all { it in '0'..'9' }
+
 fun parseDoubleOrNull(value: String): Double? = value
     .trim()
     .replace(",", ".")

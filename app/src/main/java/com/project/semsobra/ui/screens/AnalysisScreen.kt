@@ -53,6 +53,8 @@ import androidx.compose.ui.text.font.FontWeight
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.parseDoubleOrNull
+import com.project.semsobra.ui.util.isDecimalInput
+import com.project.semsobra.ui.util.isIntegerInput
 import com.project.semsobra.ui.SaveStatus
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -478,7 +480,12 @@ private fun HistoryEditDialog(
                 item {
                     OutlinedTextField(
                         value = customers,
-                        onValueChange = { customers = it; error = null },
+                        onValueChange = {
+                            if (isIntegerInput(it)) {
+                                customers = it
+                                error = null
+                            }
+                        },
                         label = { Text("Clientes atendidos") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -490,7 +497,12 @@ private fun HistoryEditDialog(
                         Text(display.food.nome, fontWeight = FontWeight.Bold)
                         OutlinedTextField(
                             value = produced[display.item.id].orEmpty(),
-                            onValueChange = { produced[display.item.id] = it; error = null },
+                            onValueChange = {
+                                if (isDecimalInput(it)) {
+                                    produced[display.item.id] = it
+                                    error = null
+                                }
+                            },
                             label = { Text("Quantidade produzida (${display.food.unidadeMedida})") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
@@ -498,7 +510,12 @@ private fun HistoryEditDialog(
                         )
                         OutlinedTextField(
                             value = leftovers[display.item.id].orEmpty(),
-                            onValueChange = { leftovers[display.item.id] = it; error = null },
+                            onValueChange = {
+                                if (isDecimalInput(it)) {
+                                    leftovers[display.item.id] = it
+                                    error = null
+                                }
+                            },
                             label = { Text("Sobra (${display.food.unidadeMedida})") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,

@@ -48,6 +48,7 @@ import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.util.formatDate
+import com.project.semsobra.ui.util.isDecimalInput
 import com.project.semsobra.ui.util.parseDoubleOrNull
 import java.time.LocalDate
 
@@ -188,7 +189,7 @@ private fun ProductionInputCard(
             }
             OutlinedTextField(
                 value = value,
-                onValueChange = onValueChange,
+                onValueChange = { if (isDecimalInput(it)) onValueChange(it) },
                 label = { Text(stringResource(R.string.label_quantity_produced, food.unidadeMedida)) },
                 placeholder = { Text(stringResource(R.string.hint_quantity)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
