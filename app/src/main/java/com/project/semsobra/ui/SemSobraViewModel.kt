@@ -29,6 +29,7 @@ import com.project.semsobra.domain.usecase.ListarPreparosUseCase
 import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.disponivelNoDia
+import com.project.semsobra.ui.model.prepararItensFechamento
 import com.project.semsobra.ui.model.UiEvent
 import com.project.semsobra.ui.model.UiMessage
 import java.time.LocalDate
@@ -400,16 +401,7 @@ class SemSobraViewModel(
         }
         val editingHistory = production.fechado
 
-        val productionItemsById = production.items.associateBy { it.item.id }
-        val itemsToSave = closingItems.map { closingItem ->
-            closingItem.copy(
-                quantidadeProduzida = productionItemsById[closingItem.id]?.item?.quantidadeProduzida
-                    ?: closingItem.quantidadeProduzida,
-                horarioAcabou = closingItem.horarioAcabou
-                    ?.trim()
-                    ?.takeIf { closingItem.acabouAntesDoFim }
-            )
-        }
+        val itemsToSave = prepararItensFechamento(production, closingItems)
         setClosingSaveStatus(SaveStatus.SAVING)
         viewModelScope.launch {
             try {
