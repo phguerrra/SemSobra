@@ -77,6 +77,7 @@ fun ClosingScreen(
     val validator = remember { ValidarDadosProducaoUseCase() }
     val invalidNumberMessage = stringResource(R.string.error_invalid_number)
     val invalidIntegerMessage = stringResource(R.string.error_invalid_integer)
+    val inputsEnabled = saveStatus != SaveStatus.SAVING
 
     LaunchedEffect(selected?.day?.id) {
         selected?.let { summary ->
@@ -122,12 +123,14 @@ fun ClosingScreen(
                 ProductionSelectorCard(
                     summary = summary,
                     selected = summary.day.id == selected?.day?.id,
+                    enabled = inputsEnabled,
                     onClick = { selectedId = summary.day.id }
                 )
             }
             item {
                 OutlinedTextField(
                     value = clientes,
+                    enabled = inputsEnabled,
                     onValueChange = {
                         if (isIntegerInput(it)) {
                             clientes = it
@@ -151,6 +154,7 @@ fun ClosingScreen(
                         time = ranOutTime[display.item.id].orEmpty(),
                         leftoverError = leftoverErrors[display.item.id],
                         timeError = timeErrors[display.item.id],
+                        enabled = inputsEnabled,
                         onLeftoverChange = {
                             leftovers = leftovers + (display.item.id to it)
                             leftoverErrors.remove(display.item.id)
@@ -255,9 +259,10 @@ fun ClosingScreen(
 }
 
 @Composable
-private fun ProductionSelectorCard(summary: ProductionSummary, selected: Boolean, onClick: () -> Unit) {
+private fun ProductionSelectorCard(summary: ProductionSummary, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Card(
         onClick = onClick,
+        enabled = enabled,
         colors = CardDefaults.cardColors(
             containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
         ),
@@ -283,6 +288,7 @@ private fun ProductionSelectorCard(summary: ProductionSummary, selected: Boolean
             }
             FilterChip(
                 selected = selected,
+                enabled = enabled,
                 onClick = onClick,
                 label = { Text(stringResource(if (summary.fechado) R.string.status_closed else R.string.status_open)) }
             )
@@ -298,6 +304,7 @@ private fun ClosingItemCard(
     time: String,
     leftoverError: String?,
     timeError: String?,
+    enabled: Boolean,
     onLeftoverChange: (String) -> Unit,
     onRanOutChange: (Boolean) -> Unit,
     onTimeChange: (String) -> Unit
@@ -330,6 +337,7 @@ private fun ClosingItemCard(
             HorizontalDivider()
             OutlinedTextField(
                 value = leftover,
+                enabled = enabled,
                 onValueChange = { if (isDecimalInput(it)) onLeftoverChange(it) },
                 label = { Text(stringResource(R.string.label_leftover, display.food.unidadeMedida)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -339,12 +347,13 @@ private fun ClosingItemCard(
                 modifier = Modifier.fillMaxWidth()
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = ranOut, onCheckedChange = onRanOutChange)
+                Checkbox(checked = ranOut, onCheckedChange = onRanOutChange, enabled = enabled)
                 Text(stringResource(R.string.label_ran_out_early))
             }
             if (ranOut) {
                 OutlinedTextField(
                     value = time,
+                    enabled = enabled,
                     onValueChange = onTimeChange,
                     label = { Text(stringResource(R.string.label_ran_out_time)) },
                     placeholder = { Text(stringResource(R.string.hint_ran_out_time)) },
