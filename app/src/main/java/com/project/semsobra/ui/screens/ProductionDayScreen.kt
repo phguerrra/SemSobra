@@ -102,6 +102,7 @@ fun ProductionDayScreen(
                     food = food,
                     value = quantities[food.id].orEmpty(),
                     error = errors[food.id],
+                    enabled = saveStatus != SaveStatus.SAVING,
                     onValueChange = {
                         quantities = quantities + (food.id to it)
                         errors.remove(food.id)
@@ -158,6 +159,7 @@ private fun ProductionInputCard(
     food: FoodUiModel,
     value: String,
     error: String?,
+    enabled: Boolean,
     onValueChange: (String) -> Unit
 ) {
     Card(
@@ -189,6 +191,7 @@ private fun ProductionInputCard(
             }
             OutlinedTextField(
                 value = value,
+                enabled = enabled,
                 onValueChange = { if (isDecimalInput(it)) onValueChange(it) },
                 label = { Text(stringResource(R.string.label_quantity_produced, food.unidadeMedida)) },
                 placeholder = { Text(stringResource(R.string.hint_quantity)) },
