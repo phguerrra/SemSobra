@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -23,6 +24,8 @@ import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.ui.SaveStatus
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -93,11 +96,68 @@ class HistoryEditingTest {
         }
     }
 
-    private fun showScreen() {
+    @Test
+    fun permiteCorrigirHorarioJaRegistrado() {
+        showScreen(initialShortageTime = "13:40")
+        openEditor()
+        compose.onNodeWithText("Horário em que acabou").performScrollTo().assertTextContains("13:40")
+        compose.onNodeWithText("Horário em que acabou").performTextReplacement("13:55")
+        compose.onNodeWithText("Salvar alterações").performClick()
+
+        compose.runOnIdle {
+            assertEquals(1, saveCalls)
+            assertEquals("13:55", savedItems.single().horarioAcabou)
+        }
+        compose.onNodeWithText("Horário em que acabou").assertIsNotEnabled()
+    }
+
+    @Test
+    fun novaFaltaExigeHorarioValidoEPreservaDigitacaoAposFalha() {
+        showScreen()
+        openEditor()
+        compose.onNode(isToggleable()).performScrollTo().performClick()
+        compose.onNodeWithText("Salvar alterações").performClick()
+        compose.onNodeWithText("Informe o horário em que o preparo acabou").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, saveCalls) }
+
+        compose.onNodeWithText("Horário em que acabou").performScrollTo().performTextReplacement("25:70")
+        compose.onNodeWithText("Salvar alterações").performClick()
+        compose.onNodeWithText("Informe o horário no formato HH:mm").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { assertEquals(0, saveCalls) }
+
+        compose.onNodeWithText("Horário em que acabou").performScrollTo().performTextReplacement("13:25")
+        compose.onNodeWithText("Salvar alterações").performClick()
+        compose.runOnIdle {
+            assertEquals(1, saveCalls)
+            assertEquals("13:25", savedItems.single().horarioAcabou)
+            status.value = SaveStatus.ERROR
+        }
+        compose.onNodeWithText("Horário em que acabou").performScrollTo().assertTextContains("13:25")
+        compose.onNodeWithText("Salvar alterações").assertIsDisplayed()
+    }
+
+    @Test
+    fun desmarcarFaltaRemoveHorarioDoFechamento() {
+        showScreen(initialShortageTime = "13:40")
+        openEditor()
+        compose.onNode(isToggleable()).performScrollTo().performClick()
+        compose.onNodeWithText("Horário em que acabou").assertDoesNotExist()
+        compose.onNodeWithText("Salvar alterações").performClick()
+
+        compose.runOnIdle {
+            assertEquals(1, saveCalls)
+            assertFalse(savedItems.single().acabouAntesDoFim)
+            assertNull(savedItems.single().horarioAcabou)
+        }
+    }
+
+    private fun showScreen(initialShortageTime: String? = null) {
         val today = LocalDate.now()
         val item = ItemProducao(
             id = 20L, producaoDiaId = 30L, alimentoId = 10L,
-            quantidadeProduzida = 10.0, quantidadeSobra = 2.0
+            quantidadeProduzida = 10.0, quantidadeSobra = 2.0,
+            acabouAntesDoFim = initialShortageTime != null,
+            horarioAcabou = initialShortageTime
         )
         val summary = ProductionSummary(
             day = ProducaoDia(id = 30L, data = today.toString(), diaDaSemana = today.dayOfWeek.value, clientesAtendidos = 100),

@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
@@ -45,6 +46,8 @@ import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.QuantityPolicy
+import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
+import com.project.semsobra.R
 import com.project.semsobra.ui.util.formatQuantity
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatPercentage
@@ -491,6 +494,12 @@ private fun HistoryEditDialog(
             summary.items.forEach { put(it.item.id, it.item.acabouAntesDoFim) }
         }
     }
+    val shortageTimes = remember(summary.day.id) {
+        mutableStateMapOf<Long, String>().apply {
+            summary.items.forEach { put(it.item.id, it.item.horarioAcabou.orEmpty()) }
+        }
+    }
+    val validator = remember { ValidarDadosProducaoUseCase() }
     var error by remember(summary.day.id) { mutableStateOf<String?>(null) }
 
     AlertDialog(
@@ -555,9 +564,27 @@ private fun HistoryEditDialog(
                             Checkbox(
                                 checked = shortages[display.item.id] == true,
                                 enabled = !saving,
-                                onCheckedChange = { shortages[display.item.id] = it }
+                                onCheckedChange = {
+                                    shortages[display.item.id] = it
+                                    if (!it) shortageTimes[display.item.id] = ""
+                                    error = null
+                                }
                             )
                             Text("Acabou antes do fim", modifier = Modifier.padding(top = 12.dp))
+                        }
+                        if (shortages[display.item.id] == true) {
+                            OutlinedTextField(
+                                value = shortageTimes[display.item.id].orEmpty(),
+                                onValueChange = {
+                                    shortageTimes[display.item.id] = it
+                                    error = null
+                                },
+                                label = { Text(stringResource(R.string.label_ran_out_time)) },
+                                placeholder = { Text(stringResource(R.string.hint_ran_out_time)) },
+                                enabled = !saving,
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -588,17 +615,26 @@ private fun HistoryEditDialog(
                                 quantidadeProduzida = parsedProduced,
                                 quantidadeSobra = parsedLeftover,
                                 acabouAntesDoFim = shortages[display.item.id] == true,
-                                horarioAcabou = display.item.horarioAcabou
+                                horarioAcabou = shortageTimes[display.item.id]
+                                    ?.trim()
                                     ?.takeIf { shortages[display.item.id] == true }
                             )
                         } else null
                     }
                     error = when {
-                        parsedCustomers == null || parsedCustomers <= 0 -> "Informe uma quantidade válida de clientes."
+                        parsedCustomers == null -> "Informe uma quantidade válida de clientes."
                         parsedItems.size != summary.items.size -> "Confira as quantidades informadas."
-                        parsedItems.any { it.quantidadeProduzida <= 0.0 } -> "A quantidade produzida deve ser maior que zero."
-                        parsedItems.any { it.quantidadeSobra > it.quantidadeProduzida } -> "A sobra não pode ser maior que a quantidade produzida."
-                        else -> null
+                        else -> runCatching {
+                            validator.validarClientesAtendidos(parsedCustomers)
+                            parsedItems.forEach { item ->
+                                validator.validarFechamentoDoItem(
+                                    item.quantidadeProduzida,
+                                    item.quantidadeSobra,
+                                    item.acabouAntesDoFim,
+                                    item.horarioAcabou
+                                )
+                            }
+                        }.exceptionOrNull()?.message
                     }
                     if (error == null) onSave(parsedCustomers!!, parsedItems)
                 }
