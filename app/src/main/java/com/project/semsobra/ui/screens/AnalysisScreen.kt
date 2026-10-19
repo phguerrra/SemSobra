@@ -12,7 +12,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -74,9 +73,10 @@ fun AnalysisScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var editingSummary by remember { mutableStateOf<ProductionSummary?>(null) }
+    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val editingSummary = summaries.firstOrNull { it.day.id == editingId }
     var pendingReopen by remember { mutableStateOf<ProductionSummary?>(null) }
-    var historySaveRequested by remember { mutableStateOf(false) }
+    var historySaveRequested by rememberSaveable { mutableStateOf(false) }
     val report = analytics.report
     val totalFaltas = report.alimentosQueMaisAcabaram.sumOf { it.quantidade }.toInt()
     val totalSobras = report.totalSobrasPorUnidade
@@ -87,7 +87,7 @@ fun AnalysisScreen(
         if (historySaveRequested) {
             when (saveStatus) {
                 SaveStatus.SUCCESS -> {
-                    editingSummary = null
+                    editingId = null
                     historySaveRequested = false
                     onSaveHistoryResultConsumed()
                 }
@@ -104,7 +104,7 @@ fun AnalysisScreen(
             saveFailed = saveStatus == SaveStatus.ERROR,
             onDismiss = {
                 if (saveStatus != SaveStatus.SAVING) {
-                    editingSummary = null
+                    editingId = null
                     historySaveRequested = false
                     onSaveHistoryResultConsumed()
                 }
@@ -123,7 +123,7 @@ fun AnalysisScreen(
                 pendingReopen = null
                 onSaveHistoryResultConsumed()
                 historySaveRequested = false
-                editingSummary = summary
+                editingId = summary.day.id
             }
         )
     }
@@ -476,31 +476,23 @@ private fun HistoryEditDialog(
     onDismiss: () -> Unit,
     onSave: (Int, List<ItemProducao>) -> Unit
 ) {
-    var customers by remember(summary.day.id) {
+    var customers by rememberSaveable(summary.day.id) {
         mutableStateOf(summary.day.clientesAtendidos.toString())
     }
-    val produced = remember(summary.day.id) {
-        mutableStateMapOf<Long, String>().apply {
-            summary.items.forEach { put(it.item.id, formatInput(it.item.quantidadeProduzida)) }
-        }
+    var produced by rememberSaveable(summary.day.id) {
+        mutableStateOf(summary.items.associate { it.item.id to formatInput(it.item.quantidadeProduzida) })
     }
-    val leftovers = remember(summary.day.id) {
-        mutableStateMapOf<Long, String>().apply {
-            summary.items.forEach { put(it.item.id, formatInput(it.item.quantidadeSobra)) }
-        }
+    var leftovers by rememberSaveable(summary.day.id) {
+        mutableStateOf(summary.items.associate { it.item.id to formatInput(it.item.quantidadeSobra) })
     }
-    val shortages = remember(summary.day.id) {
-        mutableStateMapOf<Long, Boolean>().apply {
-            summary.items.forEach { put(it.item.id, it.item.acabouAntesDoFim) }
-        }
+    var shortages by rememberSaveable(summary.day.id) {
+        mutableStateOf(summary.items.associate { it.item.id to it.item.acabouAntesDoFim })
     }
-    val shortageTimes = remember(summary.day.id) {
-        mutableStateMapOf<Long, String>().apply {
-            summary.items.forEach { put(it.item.id, it.item.horarioAcabou.orEmpty()) }
-        }
+    var shortageTimes by rememberSaveable(summary.day.id) {
+        mutableStateOf(summary.items.associate { it.item.id to it.item.horarioAcabou.orEmpty() })
     }
     val validator = remember { ValidarDadosProducaoUseCase() }
-    var error by remember(summary.day.id) { mutableStateOf<String?>(null) }
+    var error by rememberSaveable(summary.day.id) { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -536,7 +528,7 @@ private fun HistoryEditDialog(
                             value = produced[display.item.id].orEmpty(),
                             onValueChange = {
                                 if (isDecimalInput(it)) {
-                                    produced[display.item.id] = it
+                                    produced = produced + (display.item.id to it)
                                     error = null
                                 }
                             },
@@ -550,7 +542,7 @@ private fun HistoryEditDialog(
                             value = leftovers[display.item.id].orEmpty(),
                             onValueChange = {
                                 if (isDecimalInput(it)) {
-                                    leftovers[display.item.id] = it
+                                    leftovers = leftovers + (display.item.id to it)
                                     error = null
                                 }
                             },
@@ -565,8 +557,8 @@ private fun HistoryEditDialog(
                                 checked = shortages[display.item.id] == true,
                                 enabled = !saving,
                                 onCheckedChange = {
-                                    shortages[display.item.id] = it
-                                    if (!it) shortageTimes[display.item.id] = ""
+                                    shortages = shortages + (display.item.id to it)
+                                    if (!it) shortageTimes = shortageTimes + (display.item.id to "")
                                     error = null
                                 }
                             )
@@ -576,7 +568,7 @@ private fun HistoryEditDialog(
                             OutlinedTextField(
                                 value = shortageTimes[display.item.id].orEmpty(),
                                 onValueChange = {
-                                    shortageTimes[display.item.id] = it
+                                    shortageTimes = shortageTimes + (display.item.id to it)
                                     error = null
                                 },
                                 label = { Text(stringResource(R.string.label_ran_out_time)) },

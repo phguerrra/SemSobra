@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -34,6 +35,7 @@ import org.junit.runner.RunWith
 class HistoryEditingTest {
     @get:Rule
     val compose = createComposeRule()
+    private val restoration = StateRestorationTester(compose)
 
     private val status = mutableStateOf(SaveStatus.IDLE)
     private var saveCalls = 0
@@ -151,6 +153,37 @@ class HistoryEditingTest {
         }
     }
 
+    @Test
+    fun recriarTelaPreservaRascunhoEAguardaSalvamentoEmAndamento() {
+        showScreen()
+        openEditor()
+        compose.onNodeWithText("Clientes atendidos").performTextReplacement("120")
+        compose.onNodeWithText("Quantidade produzida (kg)").performScrollTo().performTextReplacement("12")
+        compose.onNodeWithText("Sobra (kg)").performScrollTo().performTextReplacement("3")
+        compose.onNode(isToggleable()).performScrollTo().performClick()
+        compose.onNodeWithText("Horário em que acabou").performScrollTo().performTextReplacement("13:55")
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        compose.onNodeWithText("Salvar alterações").assertIsDisplayed()
+        compose.onNodeWithText("Clientes atendidos").performScrollTo().assertTextContains("120")
+        compose.onNodeWithText("Quantidade produzida (kg)").performScrollTo().assertTextContains("12")
+        compose.onNodeWithText("Sobra (kg)").performScrollTo().assertTextContains("3")
+        compose.onNodeWithText("Horário em que acabou").performScrollTo().assertTextContains("13:55")
+        compose.onNodeWithText("Salvar alterações").performClick()
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        compose.onNodeWithText("Cancelar").assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals(1, saveCalls)
+            assertEquals(120, savedCustomers)
+            assertEquals("13:55", savedItems.single().horarioAcabou)
+            status.value = SaveStatus.SUCCESS
+        }
+        compose.onNodeWithText("Salvar alterações").assertDoesNotExist()
+    }
+
     private fun showScreen(initialShortageTime: String? = null) {
         val today = LocalDate.now()
         val item = ItemProducao(
@@ -167,7 +200,7 @@ class HistoryEditingTest {
         val forecast = PrevisaoPorMediaPonderada().calcular(
             EntradaPrevisao(today.plusDays(1), Turno.ALMOCO, emptyList())
         )
-        compose.setContent {
+        restoration.setContent {
             MaterialTheme {
                 AnalysisScreen(
                     analytics = AnalyticsResult.vazio(),
