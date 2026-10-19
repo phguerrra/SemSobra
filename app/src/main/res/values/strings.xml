@@ -48,4 +48,7 @@
     <string name="closing_title">Fechamento do buffet</string>
     <string name="closing_description">Informe clientes, a sobra de cada preparo e faltas antes do fim do atendimento.</string>
     <string name="closing_selected_production">Produção selecionada</string>
+    <string name="preparations_search_label">Buscar preparo pelo nome</string>
+    <string name="preparations_search_clear">Limpar busca</string>
+    <string name="preparations_search_empty">Nenhum preparo encontrado com esse nome.</string>
 </resources>

@@ -35,8 +35,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.project.semsobra.R
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.FormCard
 import com.project.semsobra.ui.components.SectionTitle
@@ -67,7 +70,11 @@ fun FoodScreen(
     }
     var foodPendingDeletion by remember { mutableStateOf<FoodUiModel?>(null) }
     var section by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
-    val foodRows = remember(foods) { foods.chunked(2) }
+    var search by rememberSaveable { mutableStateOf("") }
+    val filteredFoods = remember(foods, search) {
+        foods.filter { it.nome.contains(search.trim(), ignoreCase = true) }
+    }
+    val foodRows = remember(filteredFoods) { filteredFoods.chunked(2) }
 
     fun clearForm() {
         editingId = 0
@@ -139,7 +146,7 @@ fun FoodScreen(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().testTag("preparations_list"),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -253,13 +260,29 @@ fun FoodScreen(
             }
         }
         item {
-            SectionTitle(
-                if (section == 0) "Itens cadastrados"
-                else "Itens de ${dayName(selectedDay)}"
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionTitle(
+                    if (section == 0) "Itens cadastrados"
+                    else "Itens de ${dayName(selectedDay)}"
+                )
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    label = { Text(stringResource(R.string.preparations_search_label)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        if (search.isNotEmpty()) TextButton(onClick = { search = "" }) {
+                            Text(stringResource(R.string.preparations_search_clear))
+                        }
+                    }
+                )
+            }
         }
         if (foods.isEmpty()) {
             item { EmptyState("Cadastre o primeiro item em Todos os itens.") }
+        } else if (filteredFoods.isEmpty()) {
+            item { EmptyState(stringResource(R.string.preparations_search_empty)) }
         } else if (section == 0) {
             items(
                 items = foodRows,
@@ -288,7 +311,7 @@ fun FoodScreen(
                 }
             }
         } else {
-            items(foods, key = { it.id }) { food ->
+            items(filteredFoods, key = { it.id }) { food ->
                     DayFoodSelector(
                         food = food,
                         selected = food.disponivelNoDia(selectedDay),
