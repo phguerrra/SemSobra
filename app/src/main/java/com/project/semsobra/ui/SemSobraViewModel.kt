@@ -396,6 +396,7 @@ class SemSobraViewModel(
         val current = _uiState.value
         val production = current.productionSummaries.firstOrNull { it.day.id == productionDayId }
         if (production == null) {
+            setClosingSaveStatus(SaveStatus.ERROR)
             tryEmitMessage(UiMessage.Conflict("A produção não foi encontrada"))
             return
         }
@@ -496,6 +497,12 @@ class SemSobraViewModel(
     fun consumeFoodDeleteResult() {
         if (_uiState.value.foodDeleteStatus != SaveStatus.SAVING) {
             setFoodDeleteStatus(SaveStatus.IDLE)
+        }
+    }
+
+    fun consumeClosingSaveResult() {
+        if (_uiState.value.closingSaveStatus != SaveStatus.SAVING) {
+            setClosingSaveStatus(SaveStatus.IDLE)
         }
     }
 

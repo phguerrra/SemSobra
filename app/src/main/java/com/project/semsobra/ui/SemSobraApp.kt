@@ -249,7 +249,8 @@ private fun AppNavigation(
                 previsaoDemanda = uiState.previsaoDemanda,
                 summaries = uiState.productionSummaries,
                 saveStatus = uiState.closingSaveStatus,
-                onSaveHistory = viewModel::closeProduction
+                onSaveHistory = viewModel::closeProduction,
+                onSaveHistoryResultConsumed = viewModel::consumeClosingSaveResult
             )
         }
     }

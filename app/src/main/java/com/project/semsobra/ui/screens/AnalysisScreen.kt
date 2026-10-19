@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,25 +67,48 @@ fun AnalysisScreen(
     summaries: List<ProductionSummary>,
     saveStatus: SaveStatus,
     onSaveHistory: (Long, Int, List<ItemProducao>) -> Unit,
+    onSaveHistoryResultConsumed: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var editingSummary by remember { mutableStateOf<ProductionSummary?>(null) }
     var pendingReopen by remember { mutableStateOf<ProductionSummary?>(null) }
+    var historySaveRequested by remember { mutableStateOf(false) }
     val report = analytics.report
     val totalFaltas = report.alimentosQueMaisAcabaram.sumOf { it.quantidade }.toInt()
     val totalSobras = report.totalSobrasPorUnidade
         .joinToString(" • ") { "${formatQuantity(it.quantidade)} ${it.unidadeMedida}" }
         .ifBlank { "0" }
 
+    LaunchedEffect(saveStatus, historySaveRequested) {
+        if (historySaveRequested) {
+            when (saveStatus) {
+                SaveStatus.SUCCESS -> {
+                    editingSummary = null
+                    historySaveRequested = false
+                    onSaveHistoryResultConsumed()
+                }
+                SaveStatus.ERROR -> historySaveRequested = false
+                else -> Unit
+            }
+        }
+    }
+
     editingSummary?.let { summary ->
         HistoryEditDialog(
             summary = summary,
             saving = saveStatus == SaveStatus.SAVING,
-            onDismiss = { if (saveStatus != SaveStatus.SAVING) editingSummary = null },
+            saveFailed = saveStatus == SaveStatus.ERROR,
+            onDismiss = {
+                if (saveStatus != SaveStatus.SAVING) {
+                    editingSummary = null
+                    historySaveRequested = false
+                    onSaveHistoryResultConsumed()
+                }
+            },
             onSave = { customers, items ->
+                historySaveRequested = true
                 onSaveHistory(summary.day.id, customers, items)
-                editingSummary = null
             }
         )
     }
@@ -94,6 +118,8 @@ fun AnalysisScreen(
             onDismiss = { pendingReopen = null },
             onConfirm = {
                 pendingReopen = null
+                onSaveHistoryResultConsumed()
+                historySaveRequested = false
                 editingSummary = summary
             }
         )
@@ -116,7 +142,7 @@ fun AnalysisScreen(
         if (selectedTab == 2) {
             AnalysisHistory(
                 summaries = summaries,
-                onEdit = { pendingReopen = it },
+                onEdit = { if (saveStatus != SaveStatus.SAVING) pendingReopen = it },
                 modifier = Modifier.fillMaxSize()
             )
             return@Column
@@ -443,6 +469,7 @@ private fun AnalysisHistory(
 private fun HistoryEditDialog(
     summary: ProductionSummary,
     saving: Boolean,
+    saveFailed: Boolean,
     onDismiss: () -> Unit,
     onSave: (Int, List<ItemProducao>) -> Unit
 ) {
@@ -488,6 +515,7 @@ private fun HistoryEditDialog(
                         },
                         label = { Text("Clientes atendidos") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        enabled = !saving,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -505,6 +533,7 @@ private fun HistoryEditDialog(
                             },
                             label = { Text("Quantidade produzida (${display.food.unidadeMedida})") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            enabled = !saving,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -518,12 +547,14 @@ private fun HistoryEditDialog(
                             },
                             label = { Text("Sobra (${display.food.unidadeMedida})") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            enabled = !saving,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Row {
                             Checkbox(
                                 checked = shortages[display.item.id] == true,
+                                enabled = !saving,
                                 onCheckedChange = { shortages[display.item.id] = it }
                             )
                             Text("Acabou antes do fim", modifier = Modifier.padding(top = 12.dp))
@@ -531,6 +562,14 @@ private fun HistoryEditDialog(
                     }
                 }
                 error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+                if (saveFailed) {
+                    item {
+                        Text(
+                            "Não foi possível salvar. Os dados digitados foram mantidos para tentar novamente.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
         },
         dismissButton = {
