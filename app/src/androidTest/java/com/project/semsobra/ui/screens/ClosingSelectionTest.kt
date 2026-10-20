@@ -57,6 +57,27 @@ class ClosingSelectionTest {
         field("Sobra (kg)").assertTextContains("2")
     }
 
+    @Test
+    fun trocarSemAlteracoesOuAposReverterDigitacaoNaoPedeConfirmacao() {
+        showScreen()
+        select("19/10/2026")
+        compose.onNodeWithText("Descartar alterações?").assertDoesNotExist()
+        field("Clientes atendidos").assertTextContains("80")
+        select("18/10/2026")
+        field("Clientes atendidos").performTextReplacement("120")
+        field("Clientes atendidos").performTextReplacement("100")
+        field("Sobra (kg)").performTextReplacement("3")
+        field("Sobra (kg)").performTextReplacement("2")
+        toggleShortage()
+        field("Horário em que acabou").performTextReplacement("13:55")
+        toggleShortage()
+        field("Clientes atendidos").performTextReplacement("0100")
+        field("Sobra (kg)").performTextReplacement("2,0")
+        select("19/10/2026")
+        compose.onNodeWithText("Descartar alterações?").assertDoesNotExist()
+        field("Clientes atendidos").assertTextContains("80")
+    }
+
     private fun select(date: String) {
         val selector = hasText(date) and hasClickAction()
         compose.onNode(hasScrollAction()).performScrollToNode(selector)
