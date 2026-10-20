@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +73,7 @@ fun ClosingScreen(
     var ranOut by rememberSaveable { mutableStateOf<Map<Long, Boolean>>(emptyMap()) }
     var ranOutTime by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
     var loadedSelectionId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingSelectionId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clientesErro by remember { mutableStateOf<String?>(null) }
     val leftoverErrors = remember { mutableStateMapOf<Long, String>() }
     val timeErrors = remember { mutableStateMapOf<Long, String>() }
@@ -78,6 +81,36 @@ fun ClosingScreen(
     val invalidNumberMessage = stringResource(R.string.error_invalid_number)
     val invalidIntegerMessage = stringResource(R.string.error_invalid_integer)
     val inputsEnabled = saveStatus != SaveStatus.SAVING
+    val hasChanges = selected?.let { summary ->
+        loadedSelectionId == summary.day.id && (
+            (if (summary.day.clientesAtendidos > 0) clientes.toIntOrNull() != summary.day.clientesAtendidos
+            else clientes.isNotEmpty()) ||
+                summary.items.any { (item) ->
+                    parseDoubleOrNull(leftovers[item.id].orEmpty()) != item.quantidadeSobra ||
+                        ranOut[item.id] != item.acabouAntesDoFim ||
+                        ranOutTime[item.id].orEmpty().trim() != item.horarioAcabou.orEmpty().trim()
+                }
+        )
+    } ?: false
+
+    if (pendingSelectionId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingSelectionId = null },
+            title = { Text(stringResource(R.string.closing_discard_title)) },
+            text = { Text(stringResource(R.string.closing_discard_message)) },
+            confirmButton = {
+                TextButton(
+                    enabled = inputsEnabled,
+                    onClick = { selectedId = pendingSelectionId; pendingSelectionId = null }
+                ) { Text(stringResource(R.string.closing_discard_confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingSelectionId = null }) {
+                    Text(stringResource(R.string.closing_discard_cancel))
+                }
+            }
+        )
+    }
 
     LaunchedEffect(selected?.day?.id) {
         selected?.let { summary ->
@@ -124,7 +157,12 @@ fun ClosingScreen(
                     summary = summary,
                     selected = summary.day.id == selected?.day?.id,
                     enabled = inputsEnabled,
-                    onClick = { selectedId = summary.day.id }
+                    onClick = {
+                        if (summary.day.id != selected?.day?.id) {
+                            if (hasChanges) pendingSelectionId = summary.day.id
+                            else selectedId = summary.day.id
+                        }
+                    }
                 )
             }
             item {
