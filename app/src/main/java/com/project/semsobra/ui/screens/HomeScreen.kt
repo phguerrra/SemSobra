@@ -16,7 +16,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.project.semsobra.R
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.ForecastItemCard
 import com.project.semsobra.ui.components.HeaderCard
@@ -34,6 +36,7 @@ import java.time.LocalDate
 @Composable
 fun HomeScreen(
     analytics: AnalyticsResult,
+    forecastDate: LocalDate,
     foods: List<FoodUiModel>,
     summaries: List<ProductionSummary>,
     onOpenProduction: () -> Unit,
@@ -42,6 +45,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val today = LocalDate.now()
+    val formattedForecastDate = formatDate(forecastDate.toString())
     val todaySummary = summaries.firstOrNull { it.day.data == today.toString() }
     val nextAction = when {
         todaySummary == null -> Triple(
@@ -76,7 +80,7 @@ fun HomeScreen(
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetricCard(
-                    title = "Clientes previstos",
+                    title = stringResource(R.string.home_forecast_customers, formattedForecastDate),
                     value = analytics.forecast.clientesPrevistos.toString(),
                     modifier = Modifier.weight(1f)
                 )
@@ -128,7 +132,7 @@ fun HomeScreen(
                 }
             }
         }
-        item { SectionTitle("Produção recomendada") }
+        item { SectionTitle(stringResource(R.string.home_forecast_production, formattedForecastDate)) }
         if (analytics.forecast.items.isEmpty()) {
             item { EmptyState("Cadastre preparos e registre fechamentos para gerar previsões.") }
         } else {

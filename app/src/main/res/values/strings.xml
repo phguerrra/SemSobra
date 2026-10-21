@@ -55,4 +55,6 @@
     <string name="preparations_search_label">Buscar preparo pelo nome</string>
     <string name="preparations_search_clear">Limpar busca</string>
     <string name="preparations_search_empty">Nenhum preparo encontrado com esse nome.</string>
+    <string name="home_forecast_customers">Clientes previstos para %1$s</string>
+    <string name="home_forecast_production">Produção recomendada para %1$s</string>
 </resources>

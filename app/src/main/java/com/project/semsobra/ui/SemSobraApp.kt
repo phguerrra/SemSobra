@@ -184,6 +184,7 @@ private fun AppNavigation(
         composable(AppRoute.Home.route) {
             HomeScreen(
                 analytics = uiState.analytics,
+                forecastDate = uiState.previsaoDemanda.dataPrevisao,
                 foods = foodsToday,
                 summaries = uiState.productionSummaries,
                 onOpenProduction = { navController.navigate(AppRoute.Production.route) },
