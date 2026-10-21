@@ -81,6 +81,7 @@ fun ClosingScreen(
     val invalidNumberMessage = stringResource(R.string.error_invalid_number)
     val invalidIntegerMessage = stringResource(R.string.error_invalid_integer)
     val inputsEnabled = saveStatus != SaveStatus.SAVING
+    val canEdit = inputsEnabled && selected?.fechado == false
     val hasChanges = selected?.let { summary ->
         loadedSelectionId == summary.day.id && (
             (if (summary.day.clientesAtendidos > 0) clientes.toIntOrNull() != summary.day.clientesAtendidos
@@ -165,10 +166,17 @@ fun ClosingScreen(
                     }
                 )
             }
+            if (selected?.fechado == true) item {
+                Text(
+                    stringResource(R.string.closing_read_only),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             item {
                 OutlinedTextField(
                     value = clientes,
-                    enabled = inputsEnabled,
+                    enabled = canEdit,
                     onValueChange = {
                         if (isIntegerInput(it)) {
                             clientes = it
@@ -192,7 +200,7 @@ fun ClosingScreen(
                         time = ranOutTime[display.item.id].orEmpty(),
                         leftoverError = leftoverErrors[display.item.id],
                         timeError = timeErrors[display.item.id],
-                        enabled = inputsEnabled,
+                        enabled = canEdit,
                         onLeftoverChange = {
                             leftovers = leftovers + (display.item.id to it)
                             leftoverErrors.remove(display.item.id)
@@ -275,8 +283,7 @@ fun ClosingScreen(
                             }
                         }
                     },
-                    enabled = selected != null && !selected.fechado &&
-                        saveStatus != SaveStatus.SAVING,
+                    enabled = canEdit,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (saveStatus == SaveStatus.SAVING) {

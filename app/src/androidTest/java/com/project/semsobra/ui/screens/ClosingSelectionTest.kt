@@ -2,6 +2,8 @@ package com.project.semsobra.ui.screens
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasClickAction
@@ -78,6 +80,26 @@ class ClosingSelectionTest {
         field("Clientes atendidos").assertTextContains("80")
     }
 
+    @Test
+    fun fechamentoConcluidoPermiteConsultaETrocaParaProducaoAberta() {
+        showScreen(firstClosed = true)
+        select("18/10/2026")
+        field("Para corrigir este fechamento, acesse Análise → Histórico.").assertIsDisplayed()
+        listOf("Clientes atendidos" to "100", "Sobra (kg)" to "2", "Horário em que acabou" to "13:40")
+            .forEach { (label, value) -> field(label).assertIsNotEnabled().assertTextContains(value) }
+        compose.onNode(hasScrollAction()).performScrollToNode(isToggleable())
+        compose.onNode(isToggleable()).assertIsNotEnabled()
+        field("Salvar fechamento").assertIsNotEnabled()
+        select("19/10/2026")
+        compose.onNodeWithText("Descartar alterações?").assertDoesNotExist()
+        compose.onNodeWithText("Para corrigir este fechamento, acesse Análise → Histórico.").assertDoesNotExist()
+        field("Clientes atendidos").assertIsEnabled().assertTextContains("80")
+        field("Sobra (kg)").assertIsEnabled().assertTextContains("1")
+        toggleShortage()
+        field("Horário em que acabou").assertIsEnabled()
+        field("Salvar fechamento").assertIsEnabled()
+    }
+
     private fun select(date: String) {
         val selector = hasText(date) and hasClickAction()
         compose.onNode(hasScrollAction()).performScrollToNode(selector)
@@ -93,11 +115,11 @@ class ClosingSelectionTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText(label))
     }
 
-    private fun showScreen() = restoration.setContent {
+    private fun showScreen(firstClosed: Boolean = false) = restoration.setContent {
         MaterialTheme {
             ClosingScreen(
                 summaries = listOf(
-                    summary(30, "2026-10-18", 100, 2.0),
+                    summary(30, "2026-10-18", 100, 2.0, firstClosed),
                     summary(31, "2026-10-19", 80, 1.0)
                 ),
                 saveStatus = SaveStatus.IDLE,
@@ -106,9 +128,9 @@ class ClosingSelectionTest {
         }
     }
 
-    private fun summary(id: Long, date: String, customers: Int, leftover: Double) = ProductionSummary(
+    private fun summary(id: Long, date: String, customers: Int, leftover: Double, closed: Boolean = false) = ProductionSummary(
         ProducaoDia(id = id, data = date, diaDaSemana = java.time.LocalDate.parse(date).dayOfWeek.value, clientesAtendidos = customers),
-        listOf(ProductionItemDisplay(ItemProducao(id, id, 10, 10.0, leftover), Preparo(10, "Arroz", "", "kg", 0), 10.0 - leftover)),
-        fechado = false
+        listOf(ProductionItemDisplay(ItemProducao(id, id, 10, 10.0, leftover, closed, if (closed) "13:40" else null), Preparo(10, "Arroz", "", "kg", 0), 10.0 - leftover)),
+        fechado = closed
     )
 }

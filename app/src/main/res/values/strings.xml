@@ -48,6 +48,7 @@
     <string name="closing_title">Fechamento do buffet</string>
     <string name="closing_description">Informe clientes, a sobra de cada preparo e faltas antes do fim do atendimento.</string>
     <string name="closing_selected_production">Produção selecionada</string>
+    <string name="closing_read_only">Para corrigir este fechamento, acesse Análise → Histórico.</string>
     <string name="closing_discard_title">Descartar alterações?</string>
     <string name="closing_discard_message">Os dados digitados neste fechamento ainda não foram salvos. Deseja descartá-los e trocar de produção?</string>
     <string name="closing_discard_confirm">Descartar e trocar</string>
