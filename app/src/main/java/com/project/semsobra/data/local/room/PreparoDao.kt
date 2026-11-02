@@ -14,17 +14,26 @@ interface PreparoDao {
     @Query("SELECT * FROM preparos WHERE ativo = 1 ORDER BY nome COLLATE NOCASE ASC")
     fun listarAtivos(): List<PreparoEntity>
 
+    @Query("SELECT * FROM preparos ORDER BY id ASC")
+    fun listarTodosParaBackup(): List<PreparoEntity>
+
     @Query("SELECT * FROM preparos WHERE id = :id LIMIT 1")
     fun buscarPorId(id: Long): PreparoEntity?
 
     @Insert
     fun inserir(preparo: PreparoEntity): Long
 
+    @Insert
+    fun inserirTodosParaBackup(preparos: List<PreparoEntity>)
+
     @Update
     fun atualizar(preparo: PreparoEntity): Int
 
     @Query("DELETE FROM preparos WHERE id = :id")
     fun excluir(id: Long): Int
+
+    @Query("DELETE FROM preparos")
+    fun excluirTodosParaBackup()
 
     @Query("UPDATE preparos SET ativo = 0 WHERE id = :id")
     fun inativar(id: Long): Int

@@ -14,11 +14,20 @@ interface ProducaoDao {
     @Query(HISTORICO_QUERY)
     fun listarHistorico(): List<HistoricoRow>
 
+    @Query("SELECT * FROM producoes ORDER BY id ASC")
+    fun listarTodasParaBackup(): List<ProducaoEntity>
+
+    @Query("SELECT * FROM itens_producao ORDER BY id ASC")
+    fun listarTodosItensParaBackup(): List<ItemProducaoEntity>
+
     @Query("SELECT id FROM producoes WHERE data = :data AND turno = :turno LIMIT 1")
     fun buscarId(data: String, turno: String): Long?
 
     @Insert
     fun inserirProducao(producao: ProducaoEntity): Long
+
+    @Insert
+    fun inserirProducoesParaBackup(producoes: List<ProducaoEntity>)
 
     @Update
     fun atualizarProducao(producao: ProducaoEntity): Int
@@ -28,6 +37,15 @@ interface ProducaoDao {
 
     @Insert
     fun inserirItem(item: ItemProducaoEntity): Long
+
+    @Insert
+    fun inserirItensParaBackup(itens: List<ItemProducaoEntity>)
+
+    @Query("DELETE FROM itens_producao")
+    fun excluirTodosItensParaBackup()
+
+    @Query("DELETE FROM producoes")
+    fun excluirTodasParaBackup()
 
     @Query("UPDATE producoes SET clientes_atendidos = :clientes, fechada = 1 WHERE id = :id")
     fun fecharProducao(id: Long, clientes: Int): Int
