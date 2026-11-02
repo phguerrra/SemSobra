@@ -5,6 +5,9 @@ import android.database.sqlite.SQLiteException
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.project.semsobra.data.backup.BackupPreview
+import com.project.semsobra.data.backup.DecodedBackup
+import com.project.semsobra.data.backup.SemSobraBackupRepository
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.domain.analytics.CalculadoraAnalytics
 import com.project.semsobra.domain.exception.PreparoIndisponivelException
@@ -54,7 +57,15 @@ data class SemSobraUiState(
     val productionSaveStatus: SaveStatus = SaveStatus.IDLE,
     val foodDeleteStatus: SaveStatus = SaveStatus.IDLE,
     val closingSaveStatus: SaveStatus = SaveStatus.IDLE
-)
+) {
+    val isSaving: Boolean
+        get() = SaveStatus.SAVING in listOf(
+            foodSaveStatus,
+            productionSaveStatus,
+            foodDeleteStatus,
+            closingSaveStatus
+        )
+}
 
 enum class SaveStatus {
     IDLE,
@@ -74,7 +85,8 @@ class SemSobraViewModel(
     private val fecharProducao: FecharProducaoUseCase,
     private val motorPrevisao: MotorPrevisao,
     private val calculadoraAnalytics: CalculadoraAnalytics,
-    private val historicoMapper: HistoricoProducaoMapper
+    private val historicoMapper: HistoricoProducaoMapper,
+    private val backupRepository: SemSobraBackupRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -93,6 +105,26 @@ class SemSobraViewModel(
         if (_uiState.value.isLoading) return
         _uiState.value = _uiState.value.copy(isLoading = true, loadError = null)
         carregarDadosIniciais()
+    }
+
+    suspend fun criarBackup(): String = backupRepository.exportar()
+
+    fun inspecionarBackup(json: String): DecodedBackup = backupRepository.inspecionar(json)
+
+    suspend fun restaurarBackup(json: String): BackupPreview {
+        val preview = backupRepository.inspecionar(json).preview
+        withContext(Dispatchers.IO) { backupRepository.restaurar(json) }
+        val (preparos, historico) = withContext(Dispatchers.IO) {
+            listarPreparos.executar() to listarHistoricoProducao.executar()
+        }
+        updateState(preparos.map(Preparo::toFoodUiModel), historico)
+        _uiState.value = _uiState.value.copy(
+            foodSaveStatus = SaveStatus.IDLE,
+            productionSaveStatus = SaveStatus.IDLE,
+            foodDeleteStatus = SaveStatus.IDLE,
+            closingSaveStatus = SaveStatus.IDLE
+        )
+        return preview
     }
 
     private fun carregarDadosIniciais() {

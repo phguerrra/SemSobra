@@ -3,6 +3,7 @@ package com.project.semsobra.ui
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.project.semsobra.data.backup.SemSobraBackupRepository
 import com.project.semsobra.data.local.room.SemSobraDatabase
 import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.data.repository.PreparoLocalRepository
@@ -44,7 +45,8 @@ class SemSobraViewModelFactory(application: Application) : ViewModelProvider.Fac
             fecharProducao = FecharProducaoUseCase(producaoRepository),
             motorPrevisao = PrevisaoPorMediaPonderada(),
             calculadoraAnalytics = CalculadoraAnalytics(),
-            historicoMapper = HistoricoProducaoMapper()
+            historicoMapper = HistoricoProducaoMapper(),
+            backupRepository = SemSobraBackupRepository(database)
         ) as T
     }
 }
