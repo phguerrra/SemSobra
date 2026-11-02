@@ -42,6 +42,9 @@ fun HomeScreen(
     onOpenProduction: () -> Unit,
     onOpenClosing: () -> Unit,
     onOpenAnalysis: () -> Unit,
+    onExportBackup: () -> Unit,
+    backupEnabled: Boolean,
+    backupBusy: Boolean,
     modifier: Modifier = Modifier
 ) {
     val today = LocalDate.now()
@@ -159,6 +162,30 @@ fun HomeScreen(
         } else {
             items(summaries.take(3), key = { "summary-${it.day.id}" }) { summary ->
                 ProductionSummaryCard(summary)
+            }
+        }
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("Backup dos dados", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Exporte uma cópia dos seus dados para guardar em segurança.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Button(
+                        onClick = onExportBackup,
+                        enabled = backupEnabled,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (backupBusy) "Processando…" else "Exportar backup")
+                    }
+                }
             }
         }
     }

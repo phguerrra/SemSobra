@@ -1,6 +1,10 @@
 package com.project.semsobra.ui
 
+import android.content.Context
 import android.app.Application
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
@@ -38,7 +42,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
@@ -58,7 +65,11 @@ import com.project.semsobra.ui.screens.ClosingScreen
 import com.project.semsobra.ui.screens.FoodScreen
 import com.project.semsobra.ui.screens.HomeScreen
 import com.project.semsobra.ui.screens.ProductionDayScreen
+import java.io.IOException
 import java.time.LocalDate
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,11 +83,14 @@ fun SemSobraApp() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SemSobraApp(viewModel: SemSobraViewModel) {
-    val navController = rememberNavController()
-    val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = AppRoute.fromRoute(backStackEntry?.destination?.route)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val navController = rememberNavController()
+    var backupBusy by remember { mutableStateOf(false) }
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = AppRoute.fromRoute(backStackEntry?.destination?.route)
     val today = LocalDate.now()
     val foodsToday = remember(uiState.foods, today) {
         uiState.foods.filter { it.disponivelNoDia(today.dayOfWeek.value) }
@@ -90,6 +104,26 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
         }
     }
 
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                backupBusy = true
+                try {
+                    val json = withContext(Dispatchers.IO) { viewModel.criarBackup() }
+                    withContext(Dispatchers.IO) { writeBackup(context, uri, json) }
+                    snackbarHostState.showSnackbar("Backup exportado com sucesso")
+                } catch (error: Exception) {
+                    snackbarHostState.showSnackbar(
+                        error.message ?: "Não foi possível exportar o backup"
+                    )
+                } finally {
+                    backupBusy = false
+                }
+            }
+        }
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -159,11 +193,17 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
                     navController = navController,
                     uiState = uiState,
                     foodsToday = foodsToday,
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                    backupEnabled = !backupBusy && !uiState.isSaving,
+                    backupBusy = backupBusy,
+                    onExportBackup = {
+                        exportBackupLauncher.launch("SemSobra-backup-${LocalDate.now()}.json")
+                    },
                 )
             }
         }
     }
+
 }
 
 @Composable
@@ -171,7 +211,10 @@ private fun AppNavigation(
     navController: NavHostController,
     uiState: SemSobraUiState,
     foodsToday: List<com.project.semsobra.ui.model.FoodUiModel>,
-    viewModel: SemSobraViewModel
+    viewModel: SemSobraViewModel,
+    backupEnabled: Boolean,
+    backupBusy: Boolean,
+    onExportBackup: () -> Unit,
 ) {
     NavHost(
         navController = navController,
@@ -189,7 +232,10 @@ private fun AppNavigation(
                 summaries = uiState.productionSummaries,
                 onOpenProduction = { navController.navigate(AppRoute.Production.route) },
                 onOpenClosing = { navController.navigate(AppRoute.Closing.route) },
-                onOpenAnalysis = { navController.navigate(AppRoute.Analysis.route) }
+                onOpenAnalysis = { navController.navigate(AppRoute.Analysis.route) },
+                onExportBackup = onExportBackup,
+                backupEnabled = backupEnabled,
+                backupBusy = backupBusy
             )
         }
         composable(AppRoute.Foods.route) {
@@ -255,6 +301,12 @@ private fun AppNavigation(
             )
         }
     }
+}
+
+private fun writeBackup(context: Context, uri: Uri, json: String) {
+    val output = context.contentResolver.openOutputStream(uri, "wt")
+        ?: throw IOException("Não foi possível salvar o arquivo de backup")
+    output.bufferedWriter(Charsets.UTF_8).use { it.write(json) }
 }
 
 private fun smoothEnterTransition(fromEnd: Boolean = true): EnterTransition =
