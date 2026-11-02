@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -65,7 +67,14 @@ import com.project.semsobra.ui.screens.ClosingScreen
 import com.project.semsobra.ui.screens.FoodScreen
 import com.project.semsobra.ui.screens.HomeScreen
 import com.project.semsobra.ui.screens.ProductionDayScreen
+import com.project.semsobra.data.backup.BackupFormatException
+import com.project.semsobra.data.backup.BackupJsonCodec
+import com.project.semsobra.data.backup.BackupPreview
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.LocalDate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -89,6 +98,7 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
     var backupBusy by remember { mutableStateOf(false) }
+    var pendingRestore by remember { mutableStateOf<PendingRestore?>(null) }
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = AppRoute.fromRoute(backStackEntry?.destination?.route)
     val today = LocalDate.now()
@@ -124,6 +134,30 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
             }
         }
     }
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                backupBusy = true
+                try {
+                    val json = withContext(Dispatchers.IO) { readBackup(context, uri) }
+                    val decoded = withContext(Dispatchers.IO) { viewModel.inspecionarBackup(json) }
+                    pendingRestore = PendingRestore(json, decoded.preview)
+                } catch (error: Exception) {
+                    val message = if (error is BackupFormatException) {
+                        error.message ?: "O arquivo de backup não é válido"
+                    } else {
+                        "Não foi possível abrir esse arquivo de backup"
+                    }
+                    snackbarHostState.showSnackbar(message)
+                } finally {
+                    backupBusy = false
+                }
+            }
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -199,11 +233,45 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
                     onExportBackup = {
                         exportBackupLauncher.launch("SemSobra-backup-${LocalDate.now()}.json")
                     },
+                    onImportBackup = {
+                        importBackupLauncher.launch(arrayOf("application/json", "text/json"))
+                    }
                 )
             }
         }
     }
 
+    pendingRestore?.let { pending ->
+        RestoreBackupDialog(
+            preview = pending.preview,
+            enabled = !backupBusy,
+            onDismiss = { pendingRestore = null },
+            onConfirm = {
+                pendingRestore = null
+                scope.launch {
+                    backupBusy = true
+                    try {
+                        withContext(Dispatchers.IO) { viewModel.restaurarBackup(pending.json) }
+                        AppRoute.entries.forEach { navController.clearBackStack(it.route) }
+                        navController.navigate(AppRoute.Home.route) {
+                            popUpTo(AppRoute.Home.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                        snackbarHostState.showSnackbar("Backup restaurado com sucesso")
+                    } catch (error: Exception) {
+                        val message = if (error is BackupFormatException) {
+                            error.message ?: "O arquivo de backup não é válido"
+                        } else {
+                            "Não foi possível concluir a restauração do backup"
+                        }
+                        snackbarHostState.showSnackbar(message)
+                    } finally {
+                        backupBusy = false
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -215,6 +283,7 @@ private fun AppNavigation(
     backupEnabled: Boolean,
     backupBusy: Boolean,
     onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit
 ) {
     NavHost(
         navController = navController,
@@ -234,6 +303,7 @@ private fun AppNavigation(
                 onOpenClosing = { navController.navigate(AppRoute.Closing.route) },
                 onOpenAnalysis = { navController.navigate(AppRoute.Analysis.route) },
                 onExportBackup = onExportBackup,
+                onImportBackup = onImportBackup,
                 backupEnabled = backupEnabled,
                 backupBusy = backupBusy
             )
@@ -303,10 +373,63 @@ private fun AppNavigation(
     }
 }
 
+private data class PendingRestore(val json: String, val preview: BackupPreview)
+
+@Composable
+private fun RestoreBackupDialog(
+    preview: BackupPreview,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val dateFormatter = remember {
+        DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm").withZone(ZoneId.systemDefault())
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restaurar backup?") },
+        text = {
+            Column {
+                Text("Backup de ${dateFormatter.format(preview.exportedAt)}.")
+                Spacer(Modifier.size(8.dp))
+                Text("${preview.preparationCount} preparos, ${preview.productionCount} produções e ${preview.productionItemCount} itens.")
+                Spacer(Modifier.size(8.dp))
+                Text("A restauração substituirá todos os dados atuais do SemSobra. Essa ação não pode ser desfeita.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm, enabled = enabled) { Text("Restaurar dados") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = enabled) { Text("Cancelar") }
+        }
+    )
+}
+
+private fun readBackup(context: Context, uri: Uri): String {
+    val input = context.contentResolver.openInputStream(uri)
+        ?: throw IOException("Não foi possível abrir o arquivo selecionado")
+    return input.use { it.readUtf8Limited(BackupJsonCodec.MAX_BACKUP_BYTES) }
+}
+
 private fun writeBackup(context: Context, uri: Uri, json: String) {
     val output = context.contentResolver.openOutputStream(uri, "wt")
         ?: throw IOException("Não foi possível salvar o arquivo de backup")
     output.bufferedWriter(Charsets.UTF_8).use { it.write(json) }
+}
+
+private fun InputStream.readUtf8Limited(maxBytes: Long): String {
+    val output = ByteArrayOutputStream()
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var totalBytes = 0L
+    while (true) {
+        val bytesRead = read(buffer)
+        if (bytesRead < 0) break
+        totalBytes += bytesRead
+        if (totalBytes > maxBytes) throw BackupFormatException("O arquivo de backup é grande demais")
+        output.write(buffer, 0, bytesRead)
+    }
+    return output.toString(Charsets.UTF_8.name())
 }
 
 private fun smoothEnterTransition(fromEnd: Boolean = true): EnterTransition =

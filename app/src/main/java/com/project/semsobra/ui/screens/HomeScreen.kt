@@ -13,6 +13,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ fun HomeScreen(
     onOpenClosing: () -> Unit,
     onOpenAnalysis: () -> Unit,
     onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
     backupEnabled: Boolean,
     backupBusy: Boolean,
     modifier: Modifier = Modifier
@@ -175,7 +177,7 @@ fun HomeScreen(
                 ) {
                     Text("Backup dos dados", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Exporte uma cópia dos seus dados para guardar em segurança.",
+                        "Exporte uma cópia para guardar ou restaure um arquivo salvo.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Button(
@@ -184,6 +186,13 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (backupBusy) "Processando…" else "Exportar backup")
+                    }
+                    OutlinedButton(
+                        onClick = onImportBackup,
+                        enabled = backupEnabled,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (backupBusy) "Processando…" else "Restaurar backup")
                     }
                 }
             }
