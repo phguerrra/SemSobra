@@ -492,6 +492,9 @@ private fun InitialErrorState(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute) -> Unit) {
+    val bottomBarRoutes = remember { AppRoute.entries.filter { it != AppRoute.Analysis } }
+    val activeRoute = if (currentRoute == AppRoute.Analysis) AppRoute.Production else currentRoute
+
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 16.dp,
@@ -501,10 +504,14 @@ private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp
         ) {
-            AppRoute.entries.forEach { route ->
+            bottomBarRoutes.forEach { route ->
                 NavigationBarItem(
-                    selected = route == currentRoute,
-                    onClick = { onRouteSelected(route) },
+                    selected = route == activeRoute,
+                    onClick = {
+                        if (route != activeRoute) {
+                            onRouteSelected(route)
+                        }
+                    },
                     icon = {
                         Icon(
                             imageVector = route.icon,
