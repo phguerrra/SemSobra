@@ -10,13 +10,16 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.model.ForecastItem
@@ -175,16 +179,46 @@ fun SectionTitle(text: String) {
 }
 
 @Composable
-fun EmptyState(text: String) {
+fun EmptyState(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null
+) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)),
-        shape = RoundedCornerShape(18.dp)
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Text(
-            text,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(16.dp)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            ) {
+                Icon(
+                    imageVector = icon ?: Icons.Filled.Info,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(24.dp)
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -209,22 +243,154 @@ fun SimpleMetricRow(label: String, value: String) {
     }
 }
 
+private enum class StepState { COMPLETED, ACTIVE, UPCOMING }
+
 @Composable
 fun OperationStepCard(productionStatus: String, closingStatus: String) {
+    val isProductionDone = productionStatus != "pendente"
+    val isClosingDone = closingStatus == "fechado"
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Fluxo do dia", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            OperationStep(Icons.Filled.Restaurant, "Produção", productionStatus)
-            OperationStep(Icons.Filled.CheckCircle, "Fechamento", closingStatus)
-            OperationStep(Icons.Filled.Assessment, "Análise", "atualizada pelo histórico")
+            Text(
+                "Passos do dia",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                TimelineStepItem(
+                    title = "1. Preparo da comida",
+                    subtitle = if (isProductionDone) "Registrado ($productionStatus)" else "Informe o que foi preparado hoje",
+                    icon = Icons.Filled.Restaurant,
+                    state = if (isProductionDone) StepState.COMPLETED else StepState.ACTIVE,
+                    isLast = false
+                )
+                TimelineStepItem(
+                    title = "2. Fechamento e sobras",
+                    subtitle = when {
+                        isClosingDone -> "Fechado com sucesso"
+                        isProductionDone -> "Informe o que sobrou no fim do dia"
+                        else -> "Aguardando o fim do serviço"
+                    },
+                    icon = Icons.Filled.CheckCircle,
+                    state = when {
+                        isClosingDone -> StepState.COMPLETED
+                        isProductionDone -> StepState.ACTIVE
+                        else -> StepState.UPCOMING
+                    },
+                    isLast = false
+                )
+                TimelineStepItem(
+                    title = "3. Análise do dia",
+                    subtitle = "Relatório atualizado automaticamente",
+                    icon = Icons.Filled.Assessment,
+                    state = if (isClosingDone) StepState.COMPLETED else StepState.UPCOMING,
+                    isLast = true
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimelineStepItem(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    state: StepState,
+    isLast: Boolean
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(36.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = when (state) {
+                    StepState.COMPLETED -> MaterialTheme.colorScheme.primary
+                    StepState.ACTIVE -> MaterialTheme.colorScheme.primaryContainer
+                    StepState.UPCOMING -> MaterialTheme.colorScheme.surfaceVariant
+                },
+                contentColor = when (state) {
+                    StepState.COMPLETED -> MaterialTheme.colorScheme.onPrimary
+                    StepState.ACTIVE -> MaterialTheme.colorScheme.primary
+                    StepState.UPCOMING -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (state == StepState.COMPLETED) Icons.Filled.Check else icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(26.dp)
+                        .background(
+                            color = if (state == StepState.COMPLETED) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = if (!isLast) 12.dp else 0.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (state == StepState.ACTIVE) FontWeight.Bold else FontWeight.SemiBold,
+                    color = if (state == StepState.UPCOMING) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface
+                )
+                if (state == StepState.COMPLETED) {
+                    Text(
+                        "Concluído",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                } else if (state == StepState.ACTIVE) {
+                    Text(
+                        "Fazer agora",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -342,33 +508,6 @@ fun ProductionSummaryCard(
             if (onEdit != null && summary.fechado) {
                 TextButton(onClick = onEdit) { Text("Reabrir para corrigir") }
             }
-        }
-    }
-}
-
-@Composable
-private fun OperationStep(icon: ImageVector, title: String, status: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier
-                    .padding(8.dp)
-                    .size(20.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-            Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

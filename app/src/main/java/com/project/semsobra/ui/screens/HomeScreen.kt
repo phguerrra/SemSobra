@@ -1,26 +1,38 @@
 package com.project.semsobra.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.R
 import com.project.semsobra.ui.components.EmptyState
@@ -109,34 +121,77 @@ fun HomeScreen(
         }
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 androidx.compose.foundation.layout.Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Text(
-                        when {
-                            todaySummary == null -> "ETAPA 1 DE 2 • PRODUÇÃO"
-                            !todaySummary.fechado -> "ETAPA 2 DE 2 • FECHAMENTO"
-                            else -> "OPERAÇÃO CONCLUÍDA"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        nextAction.first,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Text(nextAction.second, style = MaterialTheme.typography.bodyMedium)
-                    Button(onClick = nextAction.third, modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Text(
+                                text = when {
+                                    todaySummary == null -> "PASSO 1 DE 2"
+                                    !todaySummary.fechado -> "PASSO 2 DE 2"
+                                    else -> "DIA CONCLUÍDO"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+
+                    androidx.compose.foundation.layout.Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            nextAction.first,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            nextAction.second,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Button(
+                        onClick = nextAction.third,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(vertical = 14.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             when {
-                                todaySummary == null -> "Começar produção"
-                                !todaySummary.fechado -> "Continuar para fechamento"
-                                else -> "Abrir análise"
-                            }
+                                todaySummary == null -> "Registrar Preparo de Hoje"
+                                !todaySummary.fechado -> "Registrar Sobras de Hoje"
+                                else -> "Ver Análise do Dia"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -144,7 +199,12 @@ fun HomeScreen(
         }
         item { SectionTitle(stringResource(R.string.home_forecast_production, formattedForecastDate)) }
         if (analytics.forecast.items.isEmpty()) {
-            item { EmptyState("Cadastre preparos e registre fechamentos para gerar previsões.") }
+            item {
+                EmptyState(
+                    "Cadastre preparos e registre fechamentos para gerar previsões.",
+                    icon = Icons.Filled.Assessment
+                )
+            }
         } else {
             items(analytics.forecast.items.take(6), key = { "forecast-${it.food.id}" }) { item ->
                 ForecastItemCard(item)
@@ -152,7 +212,12 @@ fun HomeScreen(
         }
         item { SectionTitle("Alertas") }
         if (analytics.forecast.alerts.isEmpty()) {
-            item { EmptyState("Sem alertas recentes de sobra alta ou falta.") }
+            item {
+                EmptyState(
+                    "Sem alertas recentes de sobra alta ou falta.",
+                    icon = Icons.Filled.CheckCircle
+                )
+            }
         } else {
             items(analytics.forecast.alerts) { alert ->
                 Card(
@@ -165,7 +230,12 @@ fun HomeScreen(
         }
         item { SectionTitle("Últimos dias") }
         if (summaries.isEmpty()) {
-            item { EmptyState("Nenhuma produção registrada ainda.") }
+            item {
+                EmptyState(
+                    "Nenhuma produção registrada ainda.",
+                    icon = Icons.Filled.History
+                )
+            }
         } else {
             items(summaries.take(3), key = { "summary-${it.day.id}" }) { summary ->
                 ProductionSummaryCard(summary)
