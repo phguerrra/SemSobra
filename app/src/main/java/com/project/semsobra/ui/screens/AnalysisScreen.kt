@@ -35,6 +35,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import com.project.semsobra.domain.previsao.model.QualidadePrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Warning
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.ui.components.MetricCard
@@ -183,11 +188,13 @@ fun AnalysisScreen(
                 MetricCard(
                     title = "Coloque primeiro",
                     value = "${formatWeightOneDecimal(previsaoDemanda.producaoInicialKg)} kg",
+                    icon = Icons.Filled.Restaurant,
                     modifier = Modifier.weight(1f)
                 )
                 MetricCard(
                     title = "Guarde para repor",
                     value = "${formatWeightOneDecimal(previsaoDemanda.reservaReposicaoKg)} kg",
+                    icon = Icons.Filled.Inventory,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -224,11 +231,13 @@ fun AnalysisScreen(
                 MetricCard(
                     title = "Sobra registrada",
                     value = totalSobras,
+                    icon = Icons.Filled.Assessment,
                     modifier = Modifier.weight(1f)
                 )
                 MetricCard(
                     title = "Faltas",
                     value = totalFaltas.toString(),
+                    icon = Icons.Filled.Warning,
                     modifier = Modifier.weight(1f)
                 )
             }
