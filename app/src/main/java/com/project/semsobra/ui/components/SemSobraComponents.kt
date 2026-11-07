@@ -174,9 +174,10 @@ fun SimpleMetricRow(label: String, value: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label)
+            Text(label, modifier = Modifier.weight(1f))
             Spacer(modifier = Modifier.width(12.dp))
             Text(value, fontWeight = FontWeight.Bold)
         }
@@ -285,6 +286,13 @@ fun ProductionSummaryCard(
             )
             Text("Clientes atendidos: ${if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos else "em aberto"}")
             Text("Sobra total: $leftoversByUnit")
+            summary.day.endereco?.let { endereco ->
+                Text(
+                    "Local: $endereco",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             summary.day.alteradoEm?.let {
                 Text(
                     "Fechamento corrigido em ${it.replace('T', ' ')}",
@@ -293,6 +301,23 @@ fun ProductionSummaryCard(
                 )
             }
             if (showItems) {
+                if (summary.day.latitude != null && summary.day.longitude != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Localização no Mapa (MapLibre):",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    MapLibreMapView(
+                        latitude = summary.day.latitude,
+                        longitude = summary.day.longitude,
+                        address = summary.day.endereco,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    )
+                }
                 HorizontalDivider()
                 summary.items.forEach { item ->
                     Text(

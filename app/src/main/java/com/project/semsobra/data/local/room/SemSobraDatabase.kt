@@ -28,7 +28,16 @@ abstract class SemSobraDatabase : RoomDatabase() {
                 SemSobraDatabase::class.java,
                 DATABASE_NAME
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8
+                )
+                .fallbackToDestructiveMigration(true)
                 .build()
                 .also { instance = it }
         }
@@ -115,6 +124,14 @@ abstract class SemSobraDatabase : RoomDatabase() {
                         "CASE WHEN dia_da_semana BETWEEN 1 AND 7 " +
                         "THEN (1 << (dia_da_semana - 1)) ELSE 127 END"
                 )
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE producoes ADD COLUMN endereco TEXT")
+                database.execSQL("ALTER TABLE producoes ADD COLUMN latitude REAL")
+                database.execSQL("ALTER TABLE producoes ADD COLUMN longitude REAL")
             }
         }
 
