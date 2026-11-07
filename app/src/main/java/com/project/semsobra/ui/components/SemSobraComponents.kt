@@ -301,23 +301,6 @@ fun ProductionSummaryCard(
                 )
             }
             if (showItems) {
-                if (summary.day.latitude != null && summary.day.longitude != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Localização no Mapa (MapLibre):",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    MapLibreMapView(
-                        latitude = summary.day.latitude,
-                        longitude = summary.day.longitude,
-                        address = summary.day.endereco,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                    )
-                }
                 HorizontalDivider()
                 summary.items.forEach { item ->
                     Text(
