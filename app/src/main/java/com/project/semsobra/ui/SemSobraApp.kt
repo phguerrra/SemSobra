@@ -200,11 +200,7 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
                     currentRoute = currentRoute,
                     onRouteSelected = { route ->
                         if (route != currentRoute) {
-                            navController.navigate(route.route) {
-                                popUpTo(AppRoute.Home.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            navController.navigateToTopLevelRoute(route)
                         }
                     }
                 )
@@ -299,9 +295,9 @@ private fun AppNavigation(
                 forecastDate = uiState.previsaoDemanda.dataPrevisao,
                 foods = foodsToday,
                 summaries = uiState.productionSummaries,
-                onOpenProduction = { navController.navigate(AppRoute.Production.route) },
-                onOpenClosing = { navController.navigate(AppRoute.Closing.route) },
-                onOpenAnalysis = { navController.navigate(AppRoute.Analysis.route) },
+                onOpenProduction = { navController.navigateToTopLevelRoute(AppRoute.Production) },
+                onOpenClosing = { navController.navigateToTopLevelRoute(AppRoute.Closing) },
+                onOpenAnalysis = { navController.navigateToTopLevelRoute(AppRoute.Analysis) },
                 onExportBackup = onExportBackup,
                 onImportBackup = onImportBackup,
                 backupEnabled = backupEnabled,
@@ -493,9 +489,6 @@ private fun InitialErrorState(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute) -> Unit) {
-    val bottomBarRoutes = remember { AppRoute.entries.filter { it != AppRoute.Analysis } }
-    val activeRoute = if (currentRoute == AppRoute.Analysis) AppRoute.Production else currentRoute
-
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 16.dp,
@@ -505,9 +498,9 @@ private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp
         ) {
-            bottomBarRoutes.forEach { route ->
+            AppRoute.entries.forEach { route ->
                 NavigationBarItem(
-                    selected = route == activeRoute,
+                    selected = route == currentRoute,
                     onClick = { onRouteSelected(route) },
                     icon = {
                         Icon(
@@ -529,5 +522,13 @@ private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute
                 )
             }
         }
+    }
+}
+
+private fun NavHostController.navigateToTopLevelRoute(route: AppRoute) {
+    navigate(route.route) {
+        popUpTo(AppRoute.Home.route) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
     }
 }

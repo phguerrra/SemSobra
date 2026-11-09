@@ -17,7 +17,7 @@ enum class AppRoute(
     Foods("Cardápio do Buffet", "Cardápio", Icons.Filled.Fastfood),
     Production("Produção do Dia", "Produção", Icons.Filled.Restaurant),
     Closing("Fechamento", "Fechar", Icons.Filled.CheckCircle),
-    Analysis("Produção", "Produção", Icons.Filled.Assessment);
+    Analysis("Análises", "Análises", Icons.Filled.Assessment);
 
     val route: String = name.lowercase()
 
