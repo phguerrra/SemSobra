@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.project.semsobra.data.local.room.SemSobraDatabase
+import com.project.semsobra.domain.exception.ProducaoDesatualizadaException
 import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
@@ -80,11 +81,102 @@ class FechamentoProducaoRepositoryTest {
     }
 
     @Test
-    fun itensAntigosDepoisDeEditarProducaoNaoPodemSerFechados() {
+    fun atualizarProducaoPreservaIdentidadeDosItensParaOFechamento() {
         val producaoId = criarProducao()
         val itensAntigos = itens(producaoId)
         criarProducao()
-        assertFechamentoRejeitado(producaoId, itensAntigos)
+
+        assertEquals(itensAntigos, itens(producaoId))
+        producoes.fecharProducao(producaoId, 100, itensAntigos)
+        assertTrue(producoes.listarHistorico().single().fechado)
+    }
+
+    @Test
+    fun fechamentoAposAtualizacaoAceitaTotaisAtuaisEPreservaIds() {
+        val producaoId = criarProducao()
+        val antigos = itens(producaoId)
+        producoes.salvarProducao(
+            ProducaoDia(producaoId, "2026-10-04", 7), mapOf(arrozId to 12.0)
+        )
+        val atuais = itens(producaoId)
+
+        producoes.fecharProducao(producaoId, 100, atuais.map { it.copy(quantidadeSobra = 2.0) })
+
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        assertEquals(producaoId, fechado.day.id)
+        assertEquals(antigos.map { it.id }, fechado.items.map { it.item.id })
+        assertEquals(12.0, fechado.items.single { it.food.id == arrozId }.item.quantidadeProduzida, 0.0)
+        assertEquals(5.0, fechado.items.single { it.food.id == feijaoId }.item.quantidadeProduzida, 0.0)
+    }
+
+    @Test
+    fun copiaAntigaNaoSobrescreveDozeQuilosEMantemProducaoAbertaAteNovaTentativa() {
+        val producaoId = criarProducao()
+        val antigos = itens(producaoId)
+        producoes.salvarProducao(
+            ProducaoDia(producaoId, "2026-10-04", 7), mapOf(arrozId to 12.0)
+        )
+        val antes = database.producaoDao().listarHistorico()
+        val producoesAntes = database.producaoDao().listarTodasParaBackup()
+
+        val erro = assertThrows(ProducaoDesatualizadaException::class.java) {
+            producoes.fecharProducao(producaoId, 100, antigos.map { it.copy(quantidadeSobra = 2.0) })
+        }
+
+        assertTrue(erro.message!!.contains("Atualize os dados"))
+        assertEquals(antes, database.producaoDao().listarHistorico())
+        assertEquals(producoesAntes, database.producaoDao().listarTodasParaBackup())
+        val aberta = producoes.listarHistorico().single()
+        assertTrue(!aberta.fechado)
+        assertEquals(0, aberta.day.clientesAtendidos)
+        assertEquals(12.0, aberta.items.single { it.food.id == arrozId }.item.quantidadeProduzida, 0.0)
+        assertEquals(antigos.map { it.id }, aberta.items.map { it.item.id })
+
+        producoes.fecharProducao(producaoId, 100, itens(producaoId).map { it.copy(quantidadeSobra = 2.0) })
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        assertEquals(100, fechado.day.clientesAtendidos)
+        assertEquals(12.0, fechado.items.single { it.food.id == arrozId }.item.quantidadeProduzida, 0.0)
+    }
+
+    @Test
+    fun divergenciaNoSegundoItemNaoSalvaClientesSobrasNemHorarioDoPrimeiro() {
+        val producaoId = criarProducao()
+        val antigos = itens(producaoId)
+        producoes.salvarProducao(
+            ProducaoDia(producaoId, "2026-10-04", 7), mapOf(feijaoId to 6.0)
+        )
+        val antes = database.producaoDao().listarHistorico()
+
+        assertThrows(ProducaoDesatualizadaException::class.java) {
+            producoes.fecharProducao(producaoId, 200, listOf(
+                antigos.first().copy(quantidadeSobra = 1.0, acabouAntesDoFim = true, horarioAcabou = "13:30"),
+                antigos.last().copy(quantidadeSobra = 2.0)
+            ))
+        }
+
+        assertEquals(antes, database.producaoDao().listarHistorico())
+        assertTrue(!producoes.listarHistorico().single().fechado)
+    }
+
+    @Test
+    fun correcaoHistoricaPermiteAlterarIntencionalmenteQuantidadesProduzidas() {
+        val producaoId = criarProducao()
+        val originais = itens(producaoId)
+        producoes.fecharProducao(producaoId, 100, originais)
+        val corrigidos = originais.map {
+            it.copy(quantidadeProduzida = if (it.alimentoId == arrozId) 12.0 else 7.0, quantidadeSobra = 1.0)
+        }
+
+        producoes.fecharProducao(producaoId, 120, corrigidos)
+
+        val fechado = producoes.listarHistorico().single()
+        assertTrue(fechado.fechado)
+        assertEquals(producaoId, fechado.day.id)
+        assertEquals(120, fechado.day.clientesAtendidos)
+        assertEquals(corrigidos, fechado.items.map { it.item })
+        assertTrue(!fechado.day.alteradoEm.isNullOrBlank())
     }
 
     @Test
@@ -205,8 +297,8 @@ class FechamentoProducaoRepositoryTest {
 
     @Test
     fun limitesValidosPermitemFechamentoECorrecao() {
-        val producaoId = criarProducao()
         val quantidadeMaxima = ValidarDadosProducaoUseCase.MAXIMA_QUANTIDADE
+        val producaoId = criarProducao(quantidadeArroz = quantidadeMaxima, quantidadeFeijao = quantidadeMaxima)
         val lista = itens(producaoId).map {
             it.copy(quantidadeProduzida = quantidadeMaxima, quantidadeSobra = quantidadeMaxima)
         }
@@ -265,7 +357,7 @@ class FechamentoProducaoRepositoryTest {
 
     @Test
     fun fechamentoAceitaQuantidadeQueArredondaParaMenorValorPositivoESobraZero() {
-        val producaoId = criarProducao()
+        val producaoId = criarProducao(quantidadeArroz = 0.0005, quantidadeFeijao = 0.0005)
         val lista = itens(producaoId).map { it.copy(quantidadeProduzida = 0.0005, quantidadeSobra = 0.0) }
         producoes.fecharProducao(producaoId, 1, lista)
 
@@ -286,9 +378,13 @@ class FechamentoProducaoRepositoryTest {
 
     private fun horariosInvalidos(): List<String?> = listOf(null, "", " ", "24:00", "12:60", "9:30", "abc")
 
-    private fun criarProducao(turno: Turno = Turno.ALMOCO): Long = producoes.salvarProducao(
+    private fun criarProducao(
+        turno: Turno = Turno.ALMOCO,
+        quantidadeArroz: Double = 10.0,
+        quantidadeFeijao: Double = 5.0
+    ): Long = producoes.salvarProducao(
         ProducaoDia(data = "2026-10-04", diaDaSemana = 7, turno = turno),
-        linkedMapOf(arrozId to 10.0, feijaoId to 5.0)
+        linkedMapOf(arrozId to quantidadeArroz, feijaoId to quantidadeFeijao)
     )
 
     private fun itens(producaoId: Long): List<ItemProducao> =

@@ -62,6 +62,7 @@ import androidx.navigation.compose.rememberNavController
 import com.project.semsobra.ui.navigation.AppRoute
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.model.UiEvent
+import com.project.semsobra.domain.previsao.model.Turno
 import com.project.semsobra.ui.screens.AnalysisScreen
 import com.project.semsobra.ui.screens.ClosingScreen
 import com.project.semsobra.ui.screens.FoodScreen
@@ -319,36 +320,27 @@ private fun AppNavigation(
         }
         composable(AppRoute.Production.route) {
             val todaySummary = uiState.productionSummaries.firstOrNull {
-                it.day.data == LocalDate.now().toString()
+                it.day.data == LocalDate.now().toString() && it.day.turno == Turno.ALMOCO
             }
-            if (todaySummary != null && uiState.productionSaveStatus != SaveStatus.SUCCESS) {
-                LaunchedEffect(todaySummary.day.id, todaySummary.fechado) {
-                    navController.navigate(
-                        if (todaySummary.fechado) AppRoute.Analysis.route else AppRoute.Closing.route
-                    ) {
-                        popUpTo(AppRoute.Production.route) { inclusive = true }
-                        launchSingleTop = true
+            ProductionDayScreen(
+                foods = uiState.foods,
+                saveStatus = uiState.productionSaveStatus,
+                production = todaySummary,
+                onSave = { viewModel.saveProductionToday(it, todaySummary?.day?.id) },
+                onSaveResultConsumed = viewModel::consumeProductionSaveResult,
+                onGoHome = {
+                    viewModel.consumeProductionSaveResult()
+                    navController.navigate(AppRoute.Home.route) {
+                        popUpTo(AppRoute.Home.route) { inclusive = true }
+                    }
+                },
+                onGoToClosing = {
+                    viewModel.consumeProductionSaveResult()
+                    navController.navigate(AppRoute.Closing.route) {
+                        popUpTo(AppRoute.Home.route)
                     }
                 }
-            } else {
-                ProductionDayScreen(
-                    foods = foodsToday,
-                    saveStatus = uiState.productionSaveStatus,
-                    onSave = viewModel::saveProductionToday,
-                    onGoHome = {
-                        viewModel.consumeProductionSaveResult()
-                        navController.navigate(AppRoute.Home.route) {
-                            popUpTo(AppRoute.Home.route) { inclusive = true }
-                        }
-                    },
-                    onGoToClosing = {
-                        viewModel.consumeProductionSaveResult()
-                        navController.navigate(AppRoute.Closing.route) {
-                            popUpTo(AppRoute.Home.route)
-                        }
-                    }
-                )
-            }
+            )
         }
         composable(AppRoute.Closing.route) {
             ClosingScreen(

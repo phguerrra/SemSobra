@@ -121,10 +121,22 @@ fun ClosingScreen(
         )
     }
 
-    LaunchedEffect(selected?.day?.id) {
+    LaunchedEffect(selected?.day?.id, selected?.items?.map { it.item.id }) {
         selected?.let { summary ->
             selectedId = summary.day.id
-            if (loadedSelectionId == summary.day.id) return@let
+            if (loadedSelectionId == summary.day.id) {
+                // Itens novos entram no fechamento sem apagar o rascunho dos itens existentes.
+                leftovers = summary.items.associate { display ->
+                    display.item.id to (leftovers[display.item.id] ?: formatInput(display.item.quantidadeSobra))
+                }
+                ranOut = summary.items.associate { display ->
+                    display.item.id to (ranOut[display.item.id] ?: display.item.acabouAntesDoFim)
+                }
+                ranOutTime = summary.items.associate { display ->
+                    display.item.id to (ranOutTime[display.item.id] ?: display.item.horarioAcabou.orEmpty())
+                }
+                return@let
+            }
             loadedSelectionId = summary.day.id
             clientes = if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos.toString() else ""
             leftovers = emptyMap()

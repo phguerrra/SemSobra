@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -50,9 +53,12 @@ import androidx.compose.ui.unit.sp
 import com.project.semsobra.R
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
-import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.model.FoodUiModel
+import com.project.semsobra.ui.model.atualizarRascunhoProducao
+import com.project.semsobra.ui.model.prepararItensProducao
+import com.project.semsobra.ui.model.validarQuantidadesProducao
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.isDecimalInput
@@ -66,16 +72,33 @@ fun ProductionDayScreen(
     onSave: (Map<Long, Double>) -> Unit,
     onGoHome: () -> Unit,
     onGoToClosing: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    production: ProductionSummary? = null,
+    onSaveResultConsumed: () -> Unit = {}
 ) {
-    var quantities by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    val date = production?.day?.data?.let(LocalDate::parse) ?: LocalDate.now()
+    val savedQuantities = remember(production) {
+        production?.items.orEmpty().associate { it.food.id to formatInput(it.item.quantidadeProduzida) }
+    }
+    val productionItems = remember(foods, production, date) {
+        prepararItensProducao(foods, production, date)
+    }
+    var quantities by rememberSaveable(date.toString()) { mutableStateOf(savedQuantities) }
+    var previousSaved by rememberSaveable(date.toString()) { mutableStateOf(savedQuantities) }
+    var updatingSubmission by rememberSaveable(date.toString()) { mutableStateOf(false) }
     val errors = remember { mutableStateMapOf<Long, String>() }
-    val validator = remember { ValidarDadosProducaoUseCase() }
-    val today = LocalDate.now()
-    val todayName = stringArrayResource(R.array.weekdays)[today.dayOfWeek.value - 1]
+    val closed = production?.fechado == true
+    val dayName = stringArrayResource(R.array.weekdays)[date.dayOfWeek.value - 1]
     val invalidNumberMessage = stringResource(R.string.error_invalid_number)
 
-    if (saveStatus == SaveStatus.SUCCESS) {
+    LaunchedEffect(savedQuantities, closed, saveStatus) {
+        quantities = if (closed || saveStatus == SaveStatus.SUCCESS) savedQuantities
+        else atualizarRascunhoProducao(quantities, previousSaved, savedQuantities)
+        previousSaved = savedQuantities
+        if (saveStatus == SaveStatus.SUCCESS && (updatingSubmission || closed)) onSaveResultConsumed()
+    }
+
+    if (saveStatus == SaveStatus.SUCCESS && !updatingSubmission && !closed) {
         AlertDialog(
             onDismissRequest = {},
             title = { Text(stringResource(R.string.production_saved_title)) },
@@ -89,36 +112,30 @@ fun ProductionDayScreen(
         )
     }
 
-    val onSaveAction = {
-        val parsedQuantities = mutableMapOf<Long, Double>()
-        val currentErrors = mutableMapOf<Long, String>()
-        quantities.filterValues(String::isNotBlank).forEach { (foodId, value) ->
-            val quantity = parseDoubleOrNull(value)
-            if (quantity == null) {
-                currentErrors[foodId] = invalidNumberMessage
-            } else {
-                val error = runCatching {
-                    validator.validarQuantidadeProduzida(quantity)
-                }.exceptionOrNull()?.message
-                if (error == null) {
-                    parsedQuantities[foodId] = quantity
-                } else {
-                    currentErrors[foodId] = error
-                }
+    val showSaveAction = !closed && productionItems.any { it.podeEditar } &&
+        saveStatus != SaveStatus.SUCCESS
+    val canSave = showSaveAction && saveStatus != SaveStatus.SAVING &&
+        (production != null || productionItems.any { quantities[it.food.id].orEmpty().isNotBlank() })
+    val onSaveAction: () -> Unit = {
+        if (canSave) {
+            val result = validarQuantidadesProducao(productionItems, quantities, invalidNumberMessage)
+            errors.clear()
+            errors.putAll(result.errors)
+            if (result.errors.isEmpty()) {
+                updatingSubmission = production != null
+                onSave(result.quantities)
             }
         }
-        errors.clear()
-        errors.putAll(currentErrors)
-        if (currentErrors.isEmpty()) onSave(parsedQuantities)
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButtonPosition = FabPosition.End,
         floatingActionButton = {
-            if (foods.isNotEmpty() && saveStatus != SaveStatus.SUCCESS) {
+            if (showSaveAction) {
                 ExtendedFloatingActionButton(
                     onClick = onSaveAction,
+                    modifier = Modifier.semantics { if (!canSave) disabled() },
                     icon = {
                         if (saveStatus == SaveStatus.SAVING) {
                             CircularProgressIndicator(
@@ -132,12 +149,24 @@ fun ProductionDayScreen(
                     },
                     text = {
                         Text(
-                            if (saveStatus == SaveStatus.SAVING) "Salvando…" else "Salvar Produção",
+                            stringResource(when {
+                                saveStatus == SaveStatus.SAVING -> R.string.status_saving
+                                production != null -> R.string.action_update_production
+                                else -> R.string.action_save_production
+                            }),
                             fontWeight = FontWeight.Bold
                         )
                     },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = if (canSave || saveStatus == SaveStatus.SAVING) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    },
+                    contentColor = if (canSave || saveStatus == SaveStatus.SAVING) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    }
                 )
             }
         }
@@ -146,30 +175,56 @@ fun ProductionDayScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(
+                start = 18.dp,
+                end = 18.dp,
+                top = 16.dp,
+                bottom = if (showSaveAction) 96.dp else 16.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 HeaderCard(
-                    title = stringResource(R.string.production_today_title),
-                    value = formatDate(today.toString()),
-                    subtitle = stringResource(R.string.production_today_description, todayName)
+                    title = stringResource(when {
+                        closed -> R.string.production_closed_title
+                        production != null -> R.string.production_open_title
+                        else -> R.string.production_today_title
+                    }),
+                    value = formatDate(date.toString()),
+                    subtitle = when {
+                        closed -> stringResource(R.string.production_closed_description)
+                        production != null -> stringResource(R.string.production_open_description)
+                        else -> stringResource(R.string.production_today_description, dayName)
+                    }
                 )
             }
-            if (foods.isEmpty()) {
-                item { EmptyState(stringResource(R.string.production_empty_menu, todayName)) }
+            if (saveStatus == SaveStatus.ERROR && !closed) {
+                item {
+                    Text(stringResource(R.string.production_save_failed), color = MaterialTheme.colorScheme.error)
+                }
+            }
+            if (productionItems.isEmpty()) {
+                item { EmptyState(stringResource(R.string.production_empty_menu, dayName)) }
             } else {
-                items(foods, key = { it.id }) { food ->
+                items(productionItems, key = { it.food.id }) { item ->
+                    val food = item.food
                     ProductionInputCard(
                         food = food,
-                        value = quantities[food.id].orEmpty(),
-                        error = errors[food.id],
-                        enabled = saveStatus != SaveStatus.SAVING,
+                        value = if (item.podeEditar) quantities[food.id].orEmpty()
+                        else item.quantidadeSalva?.let(::formatInput).orEmpty(),
+                        error = if (item.podeEditar) errors[food.id] else null,
+                        enabled = item.podeEditar && saveStatus != SaveStatus.SAVING,
+                        inactive = !closed && !item.podeEditar,
                         onValueChange = {
                             quantities = quantities + (food.id to it)
                             errors.remove(food.id)
                         }
                     )
+                }
+            }
+            if (closed) item {
+                Button(onClick = onGoToClosing, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.action_view_closing))
                 }
             }
         }
@@ -182,6 +237,7 @@ private fun ProductionInputCard(
     value: String,
     error: String?,
     enabled: Boolean,
+    inactive: Boolean,
     onValueChange: (String) -> Unit
 ) {
     fun addQuantity(delta: Double) {
@@ -215,6 +271,13 @@ private fun ProductionInputCard(
                     food.descricao,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            if (inactive) {
+                Text(
+                    stringResource(R.string.production_inactive_item),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
             OutlinedTextField(

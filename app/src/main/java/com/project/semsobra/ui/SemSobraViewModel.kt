@@ -12,6 +12,7 @@ import com.project.semsobra.data.mapper.HistoricoProducaoMapper
 import com.project.semsobra.domain.analytics.CalculadoraAnalytics
 import com.project.semsobra.domain.exception.PreparoIndisponivelException
 import com.project.semsobra.domain.exception.ProducaoFechadaException
+import com.project.semsobra.domain.exception.ProducaoDesatualizadaException
 import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
@@ -33,6 +34,7 @@ import com.project.semsobra.domain.usecase.SalvarProducaoUseCase
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.model.prepararItensFechamento
+import com.project.semsobra.ui.model.prepararItensProducao
 import com.project.semsobra.ui.model.UiEvent
 import com.project.semsobra.ui.model.UiMessage
 import java.time.LocalDate
@@ -43,6 +45,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -361,26 +364,44 @@ class SemSobraViewModel(
         }
     }
 
-    fun saveProductionToday(quantitiesByFoodId: Map<Long, Double>) {
+    fun saveProductionToday(quantitiesByFoodId: Map<Long, Double>, productionDayId: Long? = null) {
         if (_uiState.value.productionSaveStatus == SaveStatus.SAVING) return
 
         val current = _uiState.value
+        if (current.closingSaveStatus == SaveStatus.SAVING) {
+            setProductionSaveStatus(SaveStatus.ERROR)
+            tryEmitMessage(UiMessage.Conflict("Aguarde o fechamento em andamento antes de atualizar a produção."))
+            return
+        }
         if (quantitiesByFoodId.isEmpty()) {
             tryEmitMessage(UiMessage.Validation("Informe ao menos uma quantidade maior que zero"))
             return
         }
         val today = LocalDate.now()
-        val availableFoodIds = current.foods
-            .filter { it.disponivelNoDia(today.dayOfWeek.value) }
-            .map(FoodUiModel::id)
+        val existing = current.productionSummaries.firstOrNull {
+            it.day.data == today.toString() && it.day.turno == Turno.ALMOCO
+        }
+        if (productionDayId != null && existing?.day?.id != productionDayId) {
+            setProductionSaveStatus(SaveStatus.ERROR)
+            tryEmitMessage(UiMessage.Conflict("A produção foi alterada. Atualize a tela antes de salvar."))
+            return
+        }
+        if (existing?.fechado == true) {
+            setProductionSaveStatus(SaveStatus.ERROR)
+            tryEmitMessage(UiMessage.Conflict("Esta produção já foi fechada. Para corrigir os dados, use o histórico."))
+            return
+        }
+        val availableFoodIds = prepararItensProducao(current.foods, existing, today)
+            .filter { it.podeEditar }
+            .map { it.food.id }
             .toSet()
-        val quantitiesToSave = quantitiesByFoodId.filterKeys(availableFoodIds::contains)
-        if (quantitiesToSave.isEmpty()) {
+        if (!availableFoodIds.containsAll(quantitiesByFoodId.keys)) {
+            setProductionSaveStatus(SaveStatus.ERROR)
             tryEmitMessage(UiMessage.Conflict("Os preparos informados não estão mais disponíveis"))
             return
         }
 
-        val production = ProducaoDia(
+        val production = existing?.day ?: ProducaoDia(
             data = today.toString(),
             diaDaSemana = today.dayOfWeek.value
         )
@@ -388,11 +409,11 @@ class SemSobraViewModel(
         viewModelScope.launch {
             try {
                 val savedHistory = withContext(Dispatchers.IO) {
-                    salvarProducao.executar(production, quantitiesToSave)
+                    salvarProducao.executar(production, quantitiesByFoodId)
                 }
                 updateState(_uiState.value.foods, savedHistory)
                 setProductionSaveStatus(SaveStatus.SUCCESS)
-                emitMessage(UiMessage.Success("Produção salva"))
+                emitMessage(UiMessage.Success(if (existing == null) "Produção salva" else "Produção atualizada"))
             } catch (error: ProducaoFechadaException) {
                 setProductionSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Conflict("Esta produção já foi fechada. Para corrigir os dados, use o histórico."))
@@ -426,6 +447,11 @@ class SemSobraViewModel(
         if (_uiState.value.closingSaveStatus == SaveStatus.SAVING) return
 
         val current = _uiState.value
+        if (current.productionSaveStatus == SaveStatus.SAVING) {
+            setClosingSaveStatus(SaveStatus.ERROR)
+            tryEmitMessage(UiMessage.Conflict("Aguarde o salvamento da produção antes de fechar."))
+            return
+        }
         val production = current.productionSummaries.firstOrNull { it.day.id == productionDayId }
         if (production == null) {
             setClosingSaveStatus(SaveStatus.ERROR)
@@ -452,6 +478,22 @@ class SemSobraViewModel(
                         if (editingHistory) "Histórico atualizado" else "Fechamento salvo"
                     )
                 )
+            } catch (error: ProducaoDesatualizadaException) {
+                val refreshed = try {
+                    val history = withContext(Dispatchers.IO) { listarHistoricoProducao.executar() }
+                    updateState(_uiState.value.foods, history)
+                    true
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (refreshError: RuntimeException) {
+                    reportUnexpectedError("recarregar produção após conflito no fechamento", refreshError)
+                    false
+                }
+                setClosingSaveStatus(SaveStatus.ERROR)
+                emitMessage(UiMessage.Conflict(
+                    if (refreshed) "A produção foi alterada. Os dados atuais foram carregados; confira o fechamento e salve novamente."
+                    else "A produção foi alterada. Não foi possível recarregar os dados; tente novamente antes de fechar."
+                ))
             } catch (error: IllegalArgumentException) {
                 setClosingSaveStatus(SaveStatus.ERROR)
                 emitMessage(UiMessage.Validation(error.message ?: "Dados do fechamento inválidos"))

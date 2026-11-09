@@ -129,13 +129,116 @@ class RepositoriosLocaisTest {
         val preparoId = preparos.inserir(Preparo("Arroz", "", "kg", 1))
         val producao = ProducaoDia(data = "2026-10-03", diaDaSemana = 6)
         val producaoId = producoes.salvarProducao(producao, mapOf(preparoId to 10.0))
+        val itemId = producoes.listarHistorico().single().items.single().item.id
 
         val atualizadoId = producoes.salvarProducao(producao, mapOf(preparoId to 7.5))
 
         assertEquals(producaoId, atualizadoId)
         val historico = producoes.listarHistorico().single()
         assertFalse(historico.fechado)
+        assertEquals(itemId, historico.items.single().item.id)
         assertEquals(7.5, historico.items.single().item.quantidadeProduzida, 0.0)
+    }
+
+    @Test
+    fun atualizacaoParcialPreservaItensOmitidosEIncluiNovosSemDuplicarProducao() {
+        val arroz = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val feijao = preparos.inserir(Preparo("Feijão", "", "kg", 1))
+        val salada = preparos.inserir(Preparo("Salada", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-11-09", diaDaSemana = 1)
+        val id = producoes.salvarProducao(producao, mapOf(arroz to 10.0, feijao to 5.0))
+        val antes = database.producaoDao().listarItens(id).associateBy { it.preparoId }
+        assertTrue(preparos.inativar(feijao))
+
+        repeat(2) {
+            assertEquals(id, producoes.salvarProducao(producao.copy(id = id), mapOf(arroz to 12.0, salada to 3.0)))
+        }
+
+        val depois = database.producaoDao().listarItens(id).associateBy { it.preparoId }
+        assertEquals(1, database.producaoDao().listarTodasParaBackup().size)
+        assertEquals(setOf(arroz, feijao, salada), depois.keys)
+        assertEquals(antes[arroz]!!.id, depois[arroz]!!.id)
+        assertEquals(antes[feijao], depois[feijao])
+        assertEquals(12.0, depois[arroz]!!.quantidadeProduzida, 0.0)
+        assertEquals(3.0, depois[salada]!!.quantidadeProduzida, 0.0)
+    }
+
+    @Test
+    fun falhaDuranteAtualizacaoDesfazQuantidadesEInclusoesDaTransacao() {
+        val arroz = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val feijao = preparos.inserir(Preparo("Feijão", "", "kg", 1))
+        val salada = preparos.inserir(Preparo("Salada", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-11-09", diaDaSemana = 1)
+        val id = producoes.salvarProducao(producao, mapOf(arroz to 10.0, feijao to 5.0))
+        val antes = database.producaoDao().listarHistorico()
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER falha_atualizacao BEFORE UPDATE OF quantidade_produzida ON itens_producao " +
+                "WHEN OLD.preparo_id = $feijao BEGIN SELECT RAISE(ABORT, 'Falha simulada'); END"
+        )
+
+        assertThrows(android.database.sqlite.SQLiteException::class.java) {
+            producoes.salvarProducao(producao.copy(id = id), linkedMapOf(arroz to 12.0, salada to 3.0, feijao to 7.0))
+        }
+
+        assertEquals(antes, database.producaoDao().listarHistorico())
+        assertEquals(1, database.producaoDao().listarTodasParaBackup().size)
+    }
+
+    @Test
+    fun fechamentoAposEdicaoUsaMesmosIdsETotaisAtualizados() {
+        val arroz = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-11-09", diaDaSemana = 1)
+        val id = producoes.salvarProducao(producao, mapOf(arroz to 10.0))
+        val itemAntes = producoes.listarHistorico().single().items.single().item
+
+        producoes.salvarProducao(producao.copy(id = id), mapOf(arroz to 12.0))
+        val itemAtual = producoes.listarHistorico().single().items.single().item
+        producoes.fecharProducao(id, 100, listOf(itemAtual.copy(quantidadeSobra = 2.0)))
+
+        val summary = producoes.listarHistorico().single()
+        assertTrue(summary.fechado)
+        assertEquals(id, summary.day.id)
+        assertEquals(itemAntes.id, summary.items.single().item.id)
+        assertEquals(12.0, summary.items.single().item.quantidadeProduzida, 0.0)
+        assertEquals(10.0, summary.items.single().consumo, 0.0)
+    }
+
+    @Test
+    fun atualizacaoPreservaMetadadosESobrasJaRegistradas() {
+        val arroz = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-11-09", diaDaSemana = 1, clientesAtendidos = 25)
+        val id = producoes.salvarProducao(producao, mapOf(arroz to 10.0))
+        val item = database.producaoDao().listarItens(id).single()
+        database.producaoDao().atualizarFechamentoItem(item.id, id, 10.0, 2.0, true, "13:30")
+        val metaAntes = database.producaoDao().listarTodasParaBackup().single()
+
+        producoes.salvarProducao(producao.copy(id = id, clientesAtendidos = 0), mapOf(arroz to 12.0))
+
+        assertEquals(metaAntes, database.producaoDao().listarTodasParaBackup().single())
+        assertEquals(item.copy(quantidadeProduzida = 12.0, quantidadeSobra = 2.0,
+            acabouAntesDoFim = true, horarioAcabou = "13:30"), database.producaoDao().listarItens(id).single())
+        val antesFalha = database.producaoDao().listarHistorico()
+        assertThrows(IllegalArgumentException::class.java) {
+            producoes.salvarProducao(producao.copy(id = id), mapOf(arroz to 1.0))
+        }
+        assertEquals(antesFalha, database.producaoDao().listarHistorico())
+    }
+
+    @Test
+    fun idDivergenteNaoCriaNemAtualizaProducao() {
+        val arroz = preparos.inserir(Preparo("Arroz", "", "kg", 1))
+        val producao = ProducaoDia(data = "2026-11-09", diaDaSemana = 1)
+        val id = producoes.salvarProducao(producao, mapOf(arroz to 10.0))
+        val antes = database.producaoDao().listarHistorico()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            producoes.salvarProducao(producao.copy(id = id + 100), mapOf(arroz to 12.0))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            producoes.salvarProducao(producao.copy(id = id, data = "2026-11-10", diaDaSemana = 2), mapOf(arroz to 12.0))
+        }
+        assertEquals(antes, database.producaoDao().listarHistorico())
+        assertEquals(1, database.producaoDao().listarTodasParaBackup().size)
     }
 
     @Test

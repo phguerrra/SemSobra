@@ -6,6 +6,7 @@ import com.project.semsobra.data.local.room.ProducaoEntity
 import com.project.semsobra.data.local.room.SemSobraDatabase
 import com.project.semsobra.domain.exception.PreparoIndisponivelException
 import com.project.semsobra.domain.exception.ProducaoFechadaException
+import com.project.semsobra.domain.exception.ProducaoDesatualizadaException
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionItemDisplay
@@ -46,22 +47,33 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
             if (existenteId != null && dao.estaFechada(existenteId) == true) {
                 throw ProducaoFechadaException()
             }
+            require(producao.id == 0L || producao.id == existenteId) {
+                "A produção foi alterada. Atualize a tela antes de salvar."
+            }
             if (quantidadesPorPreparo.keys.any { preparoDao.buscarPorId(it)?.ativo != true }) {
                 throw PreparoIndisponivelException()
             }
             val entity = producao.toEntity(id = existenteId ?: 0L)
             val producaoId = existenteId ?: dao.inserirProducao(entity)
-            if (existenteId != null) dao.atualizarProducao(entity)
+            val itensExistentes = dao.listarItens(producaoId).associateBy { it.preparoId }
 
-            dao.excluirItens(producaoId)
             quantidadesPorPreparo.forEach { (preparoId, quantidade) ->
-                dao.inserirItem(
-                    ItemProducaoEntity(
-                        producaoId = producaoId,
-                        preparoId = preparoId,
-                        quantidadeProduzida = QuantityPolicy.normalize(quantidade)
+                val quantidadeNormalizada = QuantityPolicy.normalize(quantidade)
+                val itemExistente = itensExistentes[preparoId]
+                if (itemExistente == null) {
+                    dao.inserirItem(
+                        ItemProducaoEntity(
+                            producaoId = producaoId,
+                            preparoId = preparoId,
+                            quantidadeProduzida = quantidadeNormalizada
+                        )
                     )
-                )
+                } else {
+                    validarDados.validarSobra(quantidadeNormalizada, itemExistente.quantidadeSobra)
+                    check(dao.atualizarQuantidadeProduzida(itemExistente.id, producaoId, quantidadeNormalizada) == 1) {
+                        "Item da produção não encontrado"
+                    }
+                }
             }
             resultado = producaoId
         }
@@ -89,8 +101,15 @@ class ProducaoLocalRepository(private val database: SemSobraDatabase) : Producao
             val eraFechada = checkNotNull(dao.estaFechada(producaoId)) {
                 "Produção não encontrada"
             }
-            val preparosPorItem = dao.listarItens(producaoId).associate { it.id to it.preparoId }
+            val itensPersistidos = dao.listarItens(producaoId).associateBy { it.id }
+            val preparosPorItem = itensPersistidos.mapValues { it.value.preparoId }
             validarItensFechamento.executar(producaoId, itens, preparosPorItem)
+            if (!eraFechada && itens.any { item ->
+                    QuantityPolicy.normalize(item.quantidadeProduzida) !=
+                        QuantityPolicy.normalize(itensPersistidos.getValue(item.id).quantidadeProduzida)
+                }) {
+                throw ProducaoDesatualizadaException()
+            }
             check(dao.fecharProducao(producaoId, clientesAtendidos) == 1) {
                 "Produção não encontrada"
             }

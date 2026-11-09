@@ -38,6 +38,12 @@ interface ProducaoDao {
     @Insert
     fun inserirItem(item: ItemProducaoEntity): Long
 
+    @Query(
+        "UPDATE itens_producao SET quantidade_produzida = :quantidade " +
+            "WHERE id = :itemId AND producao_id = :producaoId"
+    )
+    fun atualizarQuantidadeProduzida(itemId: Long, producaoId: Long, quantidade: Double): Int
+
     @Insert
     fun inserirItensParaBackup(itens: List<ItemProducaoEntity>)
 
