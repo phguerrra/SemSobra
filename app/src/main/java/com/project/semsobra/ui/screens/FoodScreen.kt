@@ -40,6 +40,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.R
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.FormCard
 import com.project.semsobra.ui.components.SectionTitle
@@ -47,11 +48,13 @@ import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.util.dayName
+import com.project.semsobra.ui.util.formatQuantity
 import java.time.LocalDate
 
 @Composable
 fun FoodScreen(
     foods: List<FoodUiModel>,
+    summaries: List<ProductionSummary> = emptyList(),
     saveStatus: SaveStatus,
     deleteStatus: SaveStatus,
     onSave: (Long, String, String, String, Int) -> Unit,
@@ -293,17 +296,18 @@ fun FoodScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     rowFoods.forEach { food ->
-                    FoodCard(
-                        food = food,
+                        FoodCard(
+                            food = food,
+                            summaries = summaries,
                             modifier = Modifier.weight(1f),
-                        onEdit = {
-                            editingId = food.id
-                            nome = food.nome
-                            descricao = food.descricao
-                            unidade = food.unidadeMedida
-                        },
-                        onDelete = { foodPendingDeletion = food }
-                    )
+                            onEdit = {
+                                editingId = food.id
+                                nome = food.nome
+                                descricao = food.descricao
+                                unidade = food.unidadeMedida
+                            },
+                            onDelete = { foodPendingDeletion = food }
+                        )
                     }
                     if (rowFoods.size == 1) {
                         androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
@@ -325,6 +329,7 @@ fun FoodScreen(
 @Composable
 private fun FoodCard(
     food: FoodUiModel,
+    summaries: List<ProductionSummary>,
     modifier: Modifier = Modifier,
     onEdit: () -> Unit,
     onDelete: () -> Unit
@@ -333,6 +338,8 @@ private fun FoodCard(
         .split(',', ';', '\n')
         .map(String::trim)
         .filter(String::isNotBlank)
+
+    val matchingItems = summaries.flatMap { it.items }.filter { it.food.id == food.id }
 
     Card(
         modifier = modifier,
@@ -385,6 +392,28 @@ private fun FoodCard(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
+            if (matchingItems.isNotEmpty()) {
+                val timesPrepared = matchingItems.size
+                val timesRanOut = matchingItems.count { it.item.acabouAntesDoFim }
+                val avgLeftover = matchingItems.map { it.item.quantidadeSobra }.average()
+                val statsText = buildString {
+                    append("Preparado ${timesPrepared}x")
+                    if (timesRanOut > 0) append(" • Faltou ${timesRanOut}x")
+                    if (avgLeftover > 0) append(" • Sobra média: ${formatQuantity(avgLeftover)} ${food.unidadeMedida}")
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = statsText,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onEdit) { Text("Editar") }
                 TextButton(onClick = onDelete) { Text("Excluir") }

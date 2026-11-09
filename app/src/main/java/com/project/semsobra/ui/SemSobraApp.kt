@@ -311,6 +311,7 @@ private fun AppNavigation(
         composable(AppRoute.Foods.route) {
             FoodScreen(
                 foods = uiState.foods,
+                summaries = uiState.productionSummaries,
                 saveStatus = uiState.foodSaveStatus,
                 deleteStatus = uiState.foodDeleteStatus,
                 onSave = viewModel::saveFood,

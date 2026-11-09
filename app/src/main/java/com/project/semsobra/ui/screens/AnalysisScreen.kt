@@ -227,6 +227,46 @@ fun AnalysisScreen(
         }
         item { SectionTitle("Pontos de atenção") }
         item {
+            val totalProd = summaries.flatMap { it.items }.sumOf { it.item.quantidadeProduzida }
+            val totalLeft = summaries.flatMap { it.items }.sumOf { it.item.quantidadeSobra }
+            if (totalProd > 0) {
+                val efficiency = ((totalProd - totalLeft) / totalProd * 100.0).coerceIn(0.0, 100.0)
+                FormCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Aproveitamento do Buffet",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                if (efficiency >= 88.0) "Excelente aproveitamento! ${formatWeightOneDecimal(efficiency)}% de toda comida produzida foi consumida."
+                                else "${formatWeightOneDecimal(efficiency)}% da comida produzida foi consumida. Acompanhe as sobras abaixo.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.Surface(
+                            color = if (efficiency >= 88.0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                "${formatWeightOneDecimal(efficiency)}%",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = if (efficiency >= 88.0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MetricCard(
                     title = "Sobra registrada",
@@ -369,6 +409,16 @@ private fun HistoricalAverageCard(
     val pluralDay = dayName(targetDay).replace("-feira", "-feiras") +
         if (targetDay >= 6) "s" else ""
 
+    val customerDiffPercent = if (averageCustomers > 0) {
+        ((previsaoDemanda.clientesPrevistos - averageCustomers) / averageCustomers) * 100.0
+    } else 0.0
+
+    val trendText = when {
+        customerDiffPercent > 1.5 -> " (+${formatWeightOneDecimal(customerDiffPercent)}% que a média histórica)"
+        customerDiffPercent < -1.5 -> " (${formatWeightOneDecimal(customerDiffPercent)}% que a média histórica)"
+        else -> " (movimento estável em relação à média)"
+    }
+
     FormCard {
         Text(
             "Últimas ${comparable.size} $pluralDay",
@@ -381,7 +431,7 @@ private fun HistoricalAverageCard(
             style = MaterialTheme.typography.bodyLarge
         )
         Text(
-            "Para o próximo serviço, a previsão é de ${previsaoDemanda.clientesPrevistos} pessoas.",
+            "Para o próximo serviço, a previsão é de ${previsaoDemanda.clientesPrevistos} pessoas$trendText.",
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold
         )

@@ -24,6 +24,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -198,6 +199,7 @@ fun ClosingScreen(
                         leftover = leftovers[display.item.id].orEmpty(),
                         ranOut = ranOut[display.item.id] ?: false,
                         time = ranOutTime[display.item.id].orEmpty(),
+                        customersCount = clientes.toIntOrNull(),
                         leftoverError = leftoverErrors[display.item.id],
                         timeError = timeErrors[display.item.id],
                         enabled = canEdit,
@@ -347,6 +349,7 @@ private fun ClosingItemCard(
     leftover: String,
     ranOut: Boolean,
     time: String,
+    customersCount: Int?,
     leftoverError: String?,
     timeError: String?,
     enabled: Boolean,
@@ -354,6 +357,8 @@ private fun ClosingItemCard(
     onRanOutChange: (Boolean) -> Unit,
     onTimeChange: (String) -> Unit
 ) {
+    val parsedLeftover = parseDoubleOrNull(leftover)
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -391,6 +396,35 @@ private fun ClosingItemCard(
                 supportingText = leftoverError?.let { message -> { Text(message) } },
                 modifier = Modifier.fillMaxWidth()
             )
+            if (parsedLeftover != null && display.item.quantidadeProduzida > 0) {
+                val consumed = (display.item.quantidadeProduzida - parsedLeftover).coerceAtLeast(0.0)
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            "Consumo calculado: ${formatQuantity(consumed)} ${display.food.unidadeMedida}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (customersCount != null && customersCount > 0 && consumed > 0) {
+                            val perCustomer = consumed / customersCount
+                            Text(
+                                "Média estimada: ${formatQuantity(perCustomer)} ${display.food.unidadeMedida} por cliente",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = ranOut, onCheckedChange = onRanOutChange, enabled = enabled)
                 Text(stringResource(R.string.label_ran_out_early))

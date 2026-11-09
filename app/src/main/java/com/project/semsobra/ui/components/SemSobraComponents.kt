@@ -43,6 +43,7 @@ import com.project.semsobra.domain.model.ForecastItem
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatDate
+import com.project.semsobra.ui.util.formatPercentage
 import com.project.semsobra.ui.util.formatQuantity
 
 @Composable
@@ -454,6 +455,12 @@ fun ProductionSummaryCard(
     showItems: Boolean = false,
     onEdit: (() -> Unit)? = null
 ) {
+    val totalProduced = summary.items.sumOf { it.item.quantidadeProduzida }
+    val totalLeftover = summary.items.sumOf { it.item.quantidadeSobra }
+    val wasteRatioText = if (totalProduced > 0) {
+        " (${formatPercentage(totalLeftover / totalProduced)} da produção)"
+    } else ""
+
     val leftoversByUnit = summary.items
         .groupBy { it.food.unidadeMedida.trim().lowercase() }
         .mapValues { (_, items) -> QuantityPolicy.sum(items.map { it.item.quantidadeSobra }) }
@@ -476,14 +483,7 @@ fun ProductionSummaryCard(
                 fontWeight = FontWeight.Bold
             )
             Text("Clientes atendidos: ${if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos else "em aberto"}")
-            Text("Sobra total: $leftoversByUnit")
-            summary.day.endereco?.let { endereco ->
-                Text(
-                    "Local: $endereco",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text("Sobra total: $leftoversByUnit$wasteRatioText")
             summary.day.alteradoEm?.let {
                 Text(
                     "Fechamento corrigido em ${it.replace('T', ' ')}",
