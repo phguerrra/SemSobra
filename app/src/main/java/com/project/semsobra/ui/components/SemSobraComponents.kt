@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,7 +48,13 @@ import com.project.semsobra.ui.util.formatPercentage
 import com.project.semsobra.ui.util.formatQuantity
 
 @Composable
-fun HeaderCard(title: String, value: String, subtitle: String) {
+fun HeaderCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    progressPercent: Float? = null,
+    progressLabel: String? = null
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -65,7 +72,7 @@ fun HeaderCard(title: String, value: String, subtitle: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 title.uppercase(),
@@ -75,13 +82,44 @@ fun HeaderCard(title: String, value: String, subtitle: String) {
             Text(
                 value,
                 style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onPrimary
+                color = MaterialTheme.colorScheme.onPrimary,
+                fontWeight = FontWeight.Bold
             )
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.86f)
             )
+            if (progressPercent != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        progressLabel ?: "Progresso do dia",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Text(
+                        "${(progressPercent * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { progressPercent },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f)
+                )
+            }
         }
     }
 }

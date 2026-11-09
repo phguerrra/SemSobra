@@ -508,11 +508,7 @@ private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute
             bottomBarRoutes.forEach { route ->
                 NavigationBarItem(
                     selected = route == activeRoute,
-                    onClick = {
-                        if (route != activeRoute) {
-                            onRouteSelected(route)
-                        }
-                    },
+                    onClick = { onRouteSelected(route) },
                     icon = {
                         Icon(
                             imageVector = route.icon,

@@ -14,7 +14,7 @@ enum class AppRoute(
     val icon: ImageVector
 ) {
     Home("Início", "Início", Icons.Filled.Home),
-    Foods("Preparo do Buffet", "Preparo", Icons.Filled.Fastfood),
+    Foods("Cardápio do Buffet", "Cardápio", Icons.Filled.Fastfood),
     Production("Produção do Dia", "Produção", Icons.Filled.Restaurant),
     Closing("Fechamento", "Fechar", Icons.Filled.CheckCircle),
     Analysis("Produção", "Produção", Icons.Filled.Assessment);

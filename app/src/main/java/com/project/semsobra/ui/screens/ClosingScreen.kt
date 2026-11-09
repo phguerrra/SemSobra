@@ -14,16 +14,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +48,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.project.semsobra.R
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.SaveStatus
@@ -138,166 +145,182 @@ fun ClosingScreen(
         }
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        if (summaries.isEmpty()) {
-            item { EmptyState(stringResource(R.string.closing_empty)) }
-        } else {
-            item {
-                HeaderCard(
-                    title = stringResource(R.string.closing_title),
-                    value = selected?.day?.data?.let(::formatDate).orEmpty(),
-                    subtitle = stringResource(R.string.closing_description)
-                )
+    val onSaveClosingAction = {
+        selected?.let { summary ->
+            val clientesAtendidos = clientes.toIntOrNull()
+            clientesErro = if (clientesAtendidos == null) {
+                invalidIntegerMessage
+            } else {
+                runCatching { validator.validarClientesAtendidos(clientesAtendidos) }
+                    .exceptionOrNull()
+                    ?.message
             }
-            item { SectionTitle(stringResource(R.string.closing_selected_production)) }
-            items(summaries, key = { "production-${it.day.id}" }) { summary ->
-                ProductionSelectorCard(
-                    summary = summary,
-                    selected = summary.day.id == selected?.day?.id,
-                    enabled = inputsEnabled,
-                    onClick = {
-                        if (summary.day.id != selected?.day?.id) {
-                            if (hasChanges) pendingSelectionId = summary.day.id
-                            else selectedId = summary.day.id
-                        }
+
+            val novosErrosDeSobra = mutableMapOf<Long, String>()
+            val novosErrosDeHorario = mutableMapOf<Long, String>()
+            val items = summary.items.mapNotNull { display ->
+                val itemId = display.item.id
+                val didRunOut = ranOut[display.item.id] ?: false
+                val leftover = parseDoubleOrNull(leftovers[itemId].orEmpty())
+
+                if (leftover == null) {
+                    novosErrosDeSobra[itemId] = invalidNumberMessage
+                } else {
+                    runCatching {
+                        validator.validarSobra(display.item.quantidadeProduzida, leftover)
+                    }.exceptionOrNull()?.message?.let { message ->
+                        novosErrosDeSobra[itemId] = message
                     }
-                )
-            }
-            if (selected?.fechado == true) item {
-                Text(
-                    stringResource(R.string.closing_read_only),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            item {
-                OutlinedTextField(
-                    value = clientes,
-                    enabled = canEdit,
-                    onValueChange = {
-                        if (isIntegerInput(it)) {
-                            clientes = it
-                            clientesErro = null
-                        }
-                    },
-                    label = { Text(stringResource(R.string.label_customers_served)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    isError = clientesErro != null,
-                    supportingText = clientesErro?.let { message -> { Text(message) } },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            selected?.items?.forEach { display ->
-                item(key = "closing-item-${display.item.id}") {
-                    ClosingItemCard(
-                        display = display,
-                        leftover = leftovers[display.item.id].orEmpty(),
-                        ranOut = ranOut[display.item.id] ?: false,
-                        time = ranOutTime[display.item.id].orEmpty(),
-                        customersCount = clientes.toIntOrNull(),
-                        leftoverError = leftoverErrors[display.item.id],
-                        timeError = timeErrors[display.item.id],
-                        enabled = canEdit,
-                        onLeftoverChange = {
-                            leftovers = leftovers + (display.item.id to it)
-                            leftoverErrors.remove(display.item.id)
-                        },
-                        onRanOutChange = {
-                            ranOut = ranOut + (display.item.id to it)
-                            if (!it) {
-                                ranOutTime = ranOutTime + (display.item.id to "")
-                                timeErrors.remove(display.item.id)
-                            }
-                        },
-                        onTimeChange = {
-                            ranOutTime = ranOutTime + (display.item.id to it)
-                            timeErrors.remove(display.item.id)
-                        }
+                }
+
+                runCatching {
+                    validator.validarHorario(didRunOut, ranOutTime[itemId])
+                }.exceptionOrNull()?.message?.let { message ->
+                    novosErrosDeHorario[itemId] = message
+                }
+
+                if (leftover == null) {
+                    null
+                } else {
+                    display.item.copy(
+                        quantidadeSobra = leftover,
+                        acabouAntesDoFim = didRunOut,
+                        horarioAcabou = ranOutTime[itemId]
+                            ?.trim()
+                            ?.takeIf { didRunOut && it.isNotBlank() }
                     )
                 }
             }
-            item {
-                Button(
-                    onClick = {
-                        selected?.let { summary ->
-                            val clientesAtendidos = clientes.toIntOrNull()
-                            clientesErro = if (clientesAtendidos == null) {
-                                invalidIntegerMessage
-                            } else {
-                                runCatching { validator.validarClientesAtendidos(clientesAtendidos) }
-                                    .exceptionOrNull()
-                                    ?.message
-                            }
 
-                            val novosErrosDeSobra = mutableMapOf<Long, String>()
-                            val novosErrosDeHorario = mutableMapOf<Long, String>()
-                            val items = summary.items.mapNotNull { display ->
-                                val itemId = display.item.id
-                                val didRunOut = ranOut[display.item.id] ?: false
-                                val leftover = parseDoubleOrNull(leftovers[itemId].orEmpty())
+            leftoverErrors.clear()
+            leftoverErrors.putAll(novosErrosDeSobra)
+            timeErrors.clear()
+            timeErrors.putAll(novosErrosDeHorario)
 
-                                if (leftover == null) {
-                                    novosErrosDeSobra[itemId] = invalidNumberMessage
-                                } else {
-                                    runCatching {
-                                        validator.validarSobra(display.item.quantidadeProduzida, leftover)
-                                    }.exceptionOrNull()?.message?.let { message ->
-                                        novosErrosDeSobra[itemId] = message
-                                    }
-                                }
+            if (
+                clientesErro == null &&
+                novosErrosDeSobra.isEmpty() &&
+                novosErrosDeHorario.isEmpty() &&
+                items.size == summary.items.size
+            ) {
+                onClose(summary.day.id, clientesAtendidos!!, items)
+            }
+        }
+    }
 
-                                runCatching {
-                                    validator.validarHorario(didRunOut, ranOutTime[itemId])
-                                }.exceptionOrNull()?.message?.let { message ->
-                                    novosErrosDeHorario[itemId] = message
-                                }
-
-                                if (leftover == null) {
-                                    null
-                                } else {
-                                    display.item.copy(
-                                        quantidadeSobra = leftover,
-                                        acabouAntesDoFim = didRunOut,
-                                        horarioAcabou = ranOutTime[itemId]
-                                            ?.trim()
-                                            ?.takeIf { didRunOut && it.isNotBlank() }
-                                    )
-                                }
-                            }
-
-                            leftoverErrors.clear()
-                            leftoverErrors.putAll(novosErrosDeSobra)
-                            timeErrors.clear()
-                            timeErrors.putAll(novosErrosDeHorario)
-
-                            if (
-                                clientesErro == null &&
-                                novosErrosDeSobra.isEmpty() &&
-                                novosErrosDeHorario.isEmpty() &&
-                                items.size == summary.items.size
-                            ) {
-                                onClose(summary.day.id, clientesAtendidos!!, items)
-                            }
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        floatingActionButtonPosition = FabPosition.End,
+        floatingActionButton = {
+            if (canEdit) {
+                ExtendedFloatingActionButton(
+                    onClick = { onSaveClosingAction() },
+                    icon = {
+                        if (saveStatus == SaveStatus.SAVING) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Filled.Save, contentDescription = null)
                         }
                     },
-                    enabled = canEdit,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    if (saveStatus == SaveStatus.SAVING) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
+                    text = {
+                        Text(
+                            if (saveStatus == SaveStatus.SAVING) "Salvando…" else "Salvar Fechamento",
+                            fontWeight = FontWeight.Bold
                         )
-                        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.status_saving))
-                    } else {
-                        Text(stringResource(R.string.action_save_closing))
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            }
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (summaries.isEmpty()) {
+                item { EmptyState(stringResource(R.string.closing_empty)) }
+            } else {
+                item {
+                    HeaderCard(
+                        title = stringResource(R.string.closing_title),
+                        value = selected?.day?.data?.let(::formatDate).orEmpty(),
+                        subtitle = stringResource(R.string.closing_description)
+                    )
+                }
+                item { SectionTitle(stringResource(R.string.closing_selected_production)) }
+                items(summaries, key = { "production-${it.day.id}" }) { summary ->
+                    ProductionSelectorCard(
+                        summary = summary,
+                        selected = summary.day.id == selected?.day?.id,
+                        enabled = inputsEnabled,
+                        onClick = {
+                            if (summary.day.id != selected?.day?.id) {
+                                if (hasChanges) pendingSelectionId = summary.day.id
+                                else selectedId = summary.day.id
+                            }
+                        }
+                    )
+                }
+                if (selected?.fechado == true) item {
+                    Text(
+                        stringResource(R.string.closing_read_only),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                item {
+                    OutlinedTextField(
+                        value = clientes,
+                        enabled = canEdit,
+                        onValueChange = {
+                            if (isIntegerInput(it)) {
+                                clientes = it
+                                clientesErro = null
+                            }
+                        },
+                        label = { Text(stringResource(R.string.label_customers_served)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = clientesErro != null,
+                        supportingText = clientesErro?.let { message -> { Text(message) } },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                selected?.items?.forEach { display ->
+                    item(key = "closing-item-${display.item.id}") {
+                        ClosingItemCard(
+                            display = display,
+                            leftover = leftovers[display.item.id].orEmpty(),
+                            ranOut = ranOut[display.item.id] ?: false,
+                            time = ranOutTime[display.item.id].orEmpty(),
+                            customersCount = clientes.toIntOrNull(),
+                            leftoverError = leftoverErrors[display.item.id],
+                            timeError = timeErrors[display.item.id],
+                            enabled = canEdit,
+                            onLeftoverChange = {
+                                leftovers = leftovers + (display.item.id to it)
+                                leftoverErrors.remove(display.item.id)
+                            },
+                            onRanOutChange = {
+                                ranOut = ranOut + (display.item.id to it)
+                                if (!it) {
+                                    ranOutTime = ranOutTime + (display.item.id to "")
+                                    timeErrors.remove(display.item.id)
+                                }
+                            },
+                            onTimeChange = {
+                                ranOutTime = ranOutTime + (display.item.id to it)
+                                timeErrors.remove(display.item.id)
+                            }
+                        )
                     }
                 }
             }
@@ -390,12 +413,30 @@ private fun ClosingItemCard(
                 enabled = enabled,
                 onValueChange = { if (isDecimalInput(it)) onLeftoverChange(it) },
                 label = { Text(stringResource(R.string.label_leftover, display.food.unidadeMedida)) },
+                textStyle = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 isError = leftoverError != null,
                 supportingText = leftoverError?.let { message -> { Text(message) } },
                 modifier = Modifier.fillMaxWidth()
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0.5 to "+0,5", 1.0 to "+1,0", 5.0 to "+5,0").forEach { (amount, label) ->
+                    FilterChip(
+                        selected = false,
+                        enabled = enabled,
+                        onClick = {
+                            val current = parsedLeftover ?: 0.0
+                            val next = (current + amount).coerceAtLeast(0.0)
+                            onLeftoverChange(formatInput(next))
+                        },
+                        label = { Text(label, fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
             if (parsedLeftover != null && display.item.quantidadeProduzida > 0) {
                 val consumed = (display.item.quantidadeProduzida - parsedLeftover).coerceAtLeast(0.0)
                 Surface(

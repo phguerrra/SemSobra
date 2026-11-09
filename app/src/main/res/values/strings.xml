@@ -37,8 +37,8 @@
     </plurals>
 
     <!-- Produção do dia. -->
-    <string name="production_saved_title">Produção salva</string>
-    <string name="production_saved_message">A produção de hoje foi registrada. Qual é a próxima etapa?</string>
+    <string name="production_saved_title">Produção registrada com sucesso! 🍳</string>
+    <string name="production_saved_message">As quantidades preparadas para hoje foram salvas! Tenha um ótimo serviço. Volte no final do expediente para registrar o que sobrou no fechamento.</string>
     <string name="production_today_title">Produção de hoje</string>
     <string name="production_today_description">Cardápio de %1$s. Informe a quantidade preparada de cada item.</string>
     <string name="production_empty_menu">Nenhum preparo foi cadastrado para %1$s.</string>
