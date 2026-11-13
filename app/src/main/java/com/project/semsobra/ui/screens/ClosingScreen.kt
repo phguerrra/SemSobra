@@ -16,7 +16,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,9 +62,12 @@ import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
+import com.project.semsobra.ui.components.ReportExportDialog
 import com.project.semsobra.ui.components.SectionTitle
+import com.project.semsobra.ui.util.buildWhatsAppSummaryText
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
+import com.project.semsobra.ui.util.shareText
 import com.project.semsobra.ui.util.formatQuantity
 import com.project.semsobra.ui.util.isDecimalInput
 import com.project.semsobra.ui.util.isIntegerInput
@@ -106,6 +112,44 @@ fun ClosingScreen(
                 }
         )
     } ?: false
+
+    val context = LocalContext.current
+    var closingSuccessDismissed by rememberSaveable { mutableStateOf(false) }
+    var showExportDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showExportDialog && selected != null) {
+        ReportExportDialog(
+            summary = selected,
+            onDismiss = { showExportDialog = false }
+        )
+    }
+
+    if (saveStatus == SaveStatus.SUCCESS && !closingSuccessDismissed) {
+        AlertDialog(
+            onDismissRequest = { closingSuccessDismissed = true },
+            title = { Text("Fechamento Concluído! 🍃") },
+            text = { Text("O fechamento de hoje foi salvo com sucesso. Deseja gerar e compartilhar o relatório agora?") },
+            dismissButton = {
+                TextButton(onClick = { closingSuccessDismissed = true }) { Text("Voltar ao Início") }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        closingSuccessDismissed = true
+                        showExportDialog = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Assessment,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Gerar Relatório", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
 
     if (pendingSelectionId != null) {
         AlertDialog(

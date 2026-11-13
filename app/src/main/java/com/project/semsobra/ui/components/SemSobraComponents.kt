@@ -19,9 +19,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -44,16 +48,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.domain.model.QuantityPolicy
 import com.project.semsobra.domain.model.ForecastItem
 import com.project.semsobra.domain.model.ProductionSummary
+import com.project.semsobra.ui.util.ReportGenerator
+import com.project.semsobra.ui.util.buildWhatsAppSummaryText
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatPercentage
 import com.project.semsobra.ui.util.formatQuantity
+import com.project.semsobra.ui.util.shareText
 
 @Composable
 fun HeaderCard(
@@ -522,6 +530,131 @@ fun ForecastItemCard(item: ForecastItem, explain: Boolean = false) {
 }
 
 @Composable
+fun ReportExportDialog(
+    summary: ProductionSummary,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Gerar Relatório do Dia",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Escolha o formato em que deseja exportar o relatório:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Opção 1: Imagem Infográfica (PNG)
+                Card(
+                    onClick = {
+                        onDismiss()
+                        ReportGenerator.shareImageReport(context, summary)
+                    },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Image,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Imagem Infográfica (PNG)", fontWeight = FontWeight.Bold)
+                            Text("Visualização direta no balão do WhatsApp", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+
+                // Opção 2: Documento PDF (A4)
+                Card(
+                    onClick = {
+                        onDismiss()
+                        ReportGenerator.sharePdfReport(context, summary)
+                    },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PictureAsPdf,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Documento PDF (A4)", fontWeight = FontWeight.Bold)
+                            Text("Ideal para guardar, imprimir ou e-mail", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+
+                // Opção 3: Texto Formatado WhatsApp
+                Card(
+                    onClick = {
+                        onDismiss()
+                        val text = buildWhatsAppSummaryText(summary)
+                        shareText(context, text, "Compartilhar texto via WhatsApp")
+                    },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Texto Formatado (WhatsApp)", fontWeight = FontWeight.Bold)
+                            Text("Texto rápido com emojis", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+@Composable
 fun ProductionSummaryCard(
     summary: ProductionSummary,
     showItems: Boolean = false,
@@ -529,6 +662,7 @@ fun ProductionSummaryCard(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showReportDialog by remember { mutableStateOf(false) }
     val totalProduced = summary.items.sumOf { it.item.quantidadeProduzida }
     val totalLeftover = summary.items.sumOf { it.item.quantidadeSobra }
     val wastePercentage = if (totalProduced > 0) totalLeftover / totalProduced else 0.0
@@ -539,6 +673,13 @@ fun ProductionSummaryCard(
         .entries
         .joinToString(" • ") { (unit, quantity) -> "${formatQuantity(quantity)} $unit" }
         .ifBlank { "0 kg" }
+
+    if (showReportDialog) {
+        ReportExportDialog(
+            summary = summary,
+            onDismiss = { showReportDialog = false }
+        )
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -659,12 +800,31 @@ fun ProductionSummaryCard(
                 }
             }
 
-            if (onEdit != null && summary.fechado) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 OutlinedButton(
-                    onClick = onEdit,
-                    modifier = Modifier.fillMaxWidth()
+                    onClick = { showReportDialog = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Reabrir histórico para corrigir")
+                    Icon(
+                        imageVector = Icons.Filled.Assessment,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Gerar Relatório", fontWeight = FontWeight.Bold)
+                }
+
+                if (onEdit != null && summary.fechado) {
+                    OutlinedButton(
+                        onClick = onEdit,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Reabrir")
+                    }
                 }
             }
         }

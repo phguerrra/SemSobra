@@ -1,6 +1,9 @@
 package com.project.semsobra.ui.util
 
+import android.content.Context
+import android.content.Intent
 import com.project.semsobra.domain.model.QuantityPolicy
+import com.project.semsobra.domain.model.ProductionSummary
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.time.LocalDate
@@ -80,4 +83,53 @@ fun dayName(dayOfWeek: Int): String = when (dayOfWeek) {
     6 -> "sábado"
     7 -> "domingo"
     else -> "-"
+}
+
+fun shareText(context: Context, text: String, title: String = "Compartilhar resumo") {
+    val sendIntent = Intent().apply {
+        action = Intent.ACTION_SEND
+        putExtra(Intent.EXTRA_TEXT, text)
+        type = "text/plain"
+    }
+    val shareIntent = Intent.createChooser(sendIntent, title)
+    context.startActivity(shareIntent)
+}
+
+fun buildWhatsAppSummaryText(summary: ProductionSummary): String {
+    val totalProduced = summary.items.sumOf { it.item.quantidadeProduzida }
+    val totalLeftover = summary.items.sumOf { it.item.quantidadeSobra }
+    val totalConsumed = (totalProduced - totalLeftover).coerceAtLeast(0.0)
+    val wastePercentageText = if (totalProduced > 0) {
+        formatPercentage(totalLeftover / totalProduced)
+    } else "0%"
+    val efficiencyText = if (totalProduced > 0) {
+        formatPercentage(totalConsumed / totalProduced)
+    } else "100%"
+
+    val itemsText = summary.items.joinToString("\n") { item ->
+        val line = "• *${item.food.nome}:* Produzido ${formatQuantity(item.item.quantidadeProduzida)} ${item.food.unidadeMedida} | Sobra ${formatQuantity(item.item.quantidadeSobra)} ${item.food.unidadeMedida} (Consumo: ${formatQuantity(item.consumo)} ${item.food.unidadeMedida})"
+        if (item.item.acabouAntesDoFim) {
+            val timeText = item.item.horarioAcabou?.takeIf { it.isNotBlank() }?.let { " às $it" } ?: ""
+            "$line ⚠️ *Acabou antes do fim$timeText*"
+        } else {
+            line
+        }
+    }
+
+    val customersText = if (summary.day.clientesAtendidos > 0) "${summary.day.clientesAtendidos} pessoas" else "Em aberto"
+
+    return """
+🍃 *SemSobra — Resumo da Operação*
+📅 *Data:* ${formatDate(summary.day.data)} (${dayName(summary.day.diaDaSemana)})
+👥 *Clientes atendidos:* $customersText
+
+🍳 *PRODUÇÃO E SOBRAS:*
+$itemsText
+
+📊 *BALANÇO DO DIA:*
+• *Sobra Total:* ${formatQuantity(totalLeftover)} (${wastePercentageText} da produção)
+• *Aproveitamento:* $efficiencyText do buffet consumido!
+
+_Gerado pelo SemSobra App_ 🍃
+    """.trimIndent()
 }
