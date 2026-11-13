@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,18 +15,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,14 +52,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.project.semsobra.R
+import com.project.semsobra.domain.model.ItemProducao
+import com.project.semsobra.domain.model.ProductionItemDisplay
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
 import com.project.semsobra.ui.SaveStatus
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.ui.components.SectionTitle
-import com.project.semsobra.domain.model.ProductionItemDisplay
-import com.project.semsobra.domain.model.ItemProducao
-import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.formatQuantity
@@ -69,9 +79,11 @@ fun ClosingScreen(
         ?: summaries.firstOrNull { !it.fechado }
         ?: summaries.firstOrNull()
     var clientes by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
-    var leftovers by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
-    var ranOut by rememberSaveable { mutableStateOf<Map<Long, Boolean>>(emptyMap()) }
-    var ranOutTime by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
+
+    val leftoversMap = remember { mutableStateMapOf<Long, String>() }
+    val ranOutMap = remember { mutableStateMapOf<Long, Boolean>() }
+    val ranOutTimeMap = remember { mutableStateMapOf<Long, String>() }
+
     var loadedSelectionId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingSelectionId by rememberSaveable { mutableStateOf<Long?>(null) }
     var clientesErro by remember { mutableStateOf<String?>(null) }
@@ -82,14 +94,15 @@ fun ClosingScreen(
     val invalidIntegerMessage = stringResource(R.string.error_invalid_integer)
     val inputsEnabled = saveStatus != SaveStatus.SAVING
     val canEdit = inputsEnabled && selected?.fechado == false
+
     val hasChanges = selected?.let { summary ->
         loadedSelectionId == summary.day.id && (
             (if (summary.day.clientesAtendidos > 0) clientes.toIntOrNull() != summary.day.clientesAtendidos
             else clientes.isNotEmpty()) ||
                 summary.items.any { (item) ->
-                    parseDoubleOrNull(leftovers[item.id].orEmpty()) != item.quantidadeSobra ||
-                        ranOut[item.id] != item.acabouAntesDoFim ||
-                        ranOutTime[item.id].orEmpty().trim() != item.horarioAcabou.orEmpty().trim()
+                    parseDoubleOrNull(leftoversMap[item.id].orEmpty()) != item.quantidadeSobra ||
+                        (ranOutMap[item.id] ?: false) != item.acabouAntesDoFim ||
+                        ranOutTimeMap[item.id].orEmpty().trim() != item.horarioAcabou.orEmpty().trim()
                 }
         )
     } ?: false
@@ -119,20 +132,20 @@ fun ClosingScreen(
             if (loadedSelectionId == summary.day.id) return@let
             loadedSelectionId = summary.day.id
             clientes = if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos.toString() else ""
-            leftovers = emptyMap()
-            ranOut = emptyMap()
-            ranOutTime = emptyMap()
+            leftoversMap.clear()
+            ranOutMap.clear()
+            ranOutTimeMap.clear()
             clientesErro = null
             leftoverErrors.clear()
             timeErrors.clear()
             summary.items.forEach { display ->
-                leftovers = leftovers + (display.item.id to if (display.item.quantidadeSobra > 0) {
+                leftoversMap[display.item.id] = if (display.item.quantidadeSobra > 0) {
                     formatInput(display.item.quantidadeSobra)
                 } else {
                     "0"
-                })
-                ranOut = ranOut + (display.item.id to display.item.acabouAntesDoFim)
-                ranOutTime = ranOutTime + (display.item.id to display.item.horarioAcabou.orEmpty())
+                }
+                ranOutMap[display.item.id] = display.item.acabouAntesDoFim
+                ranOutTimeMap[display.item.id] = display.item.horarioAcabou.orEmpty()
             }
         }
     }
@@ -184,6 +197,7 @@ fun ClosingScreen(
                         }
                     },
                     label = { Text(stringResource(R.string.label_customers_served)) },
+                    placeholder = { Text("Ex.: 120 clientes") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     isError = clientesErro != null,
@@ -191,29 +205,47 @@ fun ClosingScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
+            // Atalho "Marcar todos com Sobra Zero"
+            if (canEdit && selected != null && selected.items.isNotEmpty()) {
+                item {
+                    OutlinedButton(
+                        onClick = {
+                            selected.items.forEach { display ->
+                                leftoversMap[display.item.id] = "0"
+                                leftoverErrors.remove(display.item.id)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("⚡ Marcar todos os pratos com Sobra Zero (0)")
+                    }
+                }
+            }
+
             selected?.items?.forEach { display ->
                 item(key = "closing-item-${display.item.id}") {
                     ClosingItemCard(
                         display = display,
-                        leftover = leftovers[display.item.id].orEmpty(),
-                        ranOut = ranOut[display.item.id] ?: false,
-                        time = ranOutTime[display.item.id].orEmpty(),
+                        leftover = leftoversMap[display.item.id].orEmpty(),
+                        ranOut = ranOutMap[display.item.id] ?: false,
+                        time = ranOutTimeMap[display.item.id].orEmpty(),
                         leftoverError = leftoverErrors[display.item.id],
                         timeError = timeErrors[display.item.id],
                         enabled = canEdit,
                         onLeftoverChange = {
-                            leftovers = leftovers + (display.item.id to it)
+                            leftoversMap[display.item.id] = it
                             leftoverErrors.remove(display.item.id)
                         },
-                        onRanOutChange = {
-                            ranOut = ranOut + (display.item.id to it)
-                            if (!it) {
-                                ranOutTime = ranOutTime + (display.item.id to "")
+                        onRanOutChange = { isChecked ->
+                            ranOutMap[display.item.id] = isChecked
+                            if (!isChecked) {
+                                ranOutTimeMap[display.item.id] = ""
                                 timeErrors.remove(display.item.id)
                             }
                         },
                         onTimeChange = {
-                            ranOutTime = ranOutTime + (display.item.id to it)
+                            ranOutTimeMap[display.item.id] = it
                             timeErrors.remove(display.item.id)
                         }
                     )
@@ -236,8 +268,8 @@ fun ClosingScreen(
                             val novosErrosDeHorario = mutableMapOf<Long, String>()
                             val items = summary.items.mapNotNull { display ->
                                 val itemId = display.item.id
-                                val didRunOut = ranOut[display.item.id] ?: false
-                                val leftover = parseDoubleOrNull(leftovers[itemId].orEmpty())
+                                val didRunOut = ranOutMap[itemId] ?: false
+                                val leftover = parseDoubleOrNull(leftoversMap[itemId].orEmpty())
 
                                 if (leftover == null) {
                                     novosErrosDeSobra[itemId] = invalidNumberMessage
@@ -250,7 +282,7 @@ fun ClosingScreen(
                                 }
 
                                 runCatching {
-                                    validator.validarHorario(didRunOut, ranOutTime[itemId])
+                                    validator.validarHorario(didRunOut, ranOutTimeMap[itemId])
                                 }.exceptionOrNull()?.message?.let { message ->
                                     novosErrosDeHorario[itemId] = message
                                 }
@@ -261,7 +293,7 @@ fun ClosingScreen(
                                     display.item.copy(
                                         quantidadeSobra = leftover,
                                         acabouAntesDoFim = didRunOut,
-                                        horarioAcabou = ranOutTime[itemId]
+                                        horarioAcabou = ranOutTimeMap[itemId]
                                             ?.trim()
                                             ?.takeIf { didRunOut && it.isNotBlank() }
                                     )
@@ -292,7 +324,7 @@ fun ClosingScreen(
                             color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
-                        androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.status_saving))
                     } else {
                         Text(stringResource(R.string.action_save_closing))
@@ -354,6 +386,19 @@ private fun ClosingItemCard(
     onRanOutChange: (Boolean) -> Unit,
     onTimeChange: (String) -> Unit
 ) {
+    var showTimePicker by remember { mutableStateOf(false) }
+
+    if (showTimePicker) {
+        ClockTimePickerModal(
+            initialTime = time.ifBlank { "13:30" },
+            onTimeSelected = { selectedTime ->
+                onTimeChange(selectedTime)
+                showTimePicker = false
+            },
+            onDismiss = { showTimePicker = false }
+        )
+    }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -364,7 +409,26 @@ private fun ClosingItemCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(display.food.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(display.food.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = display.food.unidadeMedida,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
             if (display.food.descricao.isNotBlank()) {
                 Text(
                     display.food.descricao,
@@ -372,6 +436,7 @@ private fun ClosingItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
             Text(
                 stringResource(
                     R.string.quantity_produced_summary,
@@ -379,7 +444,9 @@ private fun ClosingItemCard(
                     display.food.unidadeMedida
                 )
             )
+
             HorizontalDivider()
+
             val isGram = display.food.unidadeMedida.equals("g", ignoreCase = true)
             OutlinedTextField(
                 value = leftover,
@@ -395,10 +462,21 @@ private fun ClosingItemCard(
                 supportingText = leftoverError?.let { message -> { Text(message) } },
                 modifier = Modifier.fillMaxWidth()
             )
+
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = ranOut, onCheckedChange = onRanOutChange, enabled = enabled)
+                Checkbox(
+                    checked = ranOut,
+                    onCheckedChange = { isChecked ->
+                        onRanOutChange(isChecked)
+                        if (isChecked && time.isBlank()) {
+                            showTimePicker = true
+                        }
+                    },
+                    enabled = enabled
+                )
                 Text(stringResource(R.string.label_ran_out_early))
             }
+
             if (ranOut) {
                 OutlinedTextField(
                     value = time,
@@ -409,9 +487,63 @@ private fun ClosingItemCard(
                     singleLine = true,
                     isError = timeError != null,
                     supportingText = timeError?.let { message -> { Text(message) } },
+                    trailingIcon = {
+                        if (enabled) {
+                            IconButton(onClick = { showTimePicker = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Schedule,
+                                    contentDescription = "Selecionar no relógio",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ClockTimePickerModal(
+    initialTime: String,
+    onTimeSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val initialHour = initialTime.split(":").getOrNull(0)?.toIntOrNull() ?: 13
+    val initialMinute = initialTime.split(":").getOrNull(1)?.toIntOrNull() ?: 30
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Selecione o horário em que acabou") },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TimePicker(state = timePickerState)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val formattedHour = timePickerState.hour.toString().padStart(2, '0')
+                val formattedMinute = timePickerState.minute.toString().padStart(2, '0')
+                onTimeSelected("$formattedHour:$formattedMinute")
+            }) {
+                Text("Confirmar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
 }

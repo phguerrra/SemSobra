@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -27,6 +28,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -79,14 +81,30 @@ fun ProductionDayScreen(
             item.quantidadeSalva?.let { item.food.id to formatQuantity(it) }
         }.toMap()
     }
-    var draftQuantities by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
+
+    val draftQuantitiesMap = remember { mutableStateMapOf<Long, String>() }
     var previousSavedQuantities by remember { mutableStateOf(savedQuantities) }
     val errors = remember { mutableStateMapOf<Long, String>() }
     val invalidNumberMessage = stringResource(R.string.error_invalid_number)
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(savedQuantities) {
-        draftQuantities = atualizarRascunhoProducao(draftQuantities, previousSavedQuantities, savedQuantities)
+        val merged = atualizarRascunhoProducao(draftQuantitiesMap.toMap(), previousSavedQuantities, savedQuantities)
+        draftQuantitiesMap.clear()
+        draftQuantitiesMap.putAll(merged)
         previousSavedQuantities = savedQuantities
+    }
+
+    val filteredItems = remember(items, searchQuery) {
+        if (searchQuery.isBlank()) items
+        else items.filter { it.food.nome.contains(searchQuery.trim(), ignoreCase = true) }
+    }
+
+    val filledCount = remember(items, draftQuantitiesMap.toMap(), savedQuantities) {
+        items.count { item ->
+            val valStr = draftQuantitiesMap[item.food.id] ?: savedQuantities[item.food.id]
+            valStr.orEmpty().isNotBlank()
+        }
     }
 
     if (saveStatus == SaveStatus.SUCCESS) {
@@ -147,16 +165,68 @@ fun ProductionDayScreen(
         if (items.isEmpty()) {
             item { EmptyState(stringResource(R.string.production_empty_menu, todayName)) }
         } else {
-            items(items, key = { it.food.id }) { itemDisplay ->
+            // Indicador de Progresso do Preenchimento
+            item {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Progresso dos itens do dia",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "$filledCount / ${items.size} informados",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Barra de Busca quando houver mais de 4 itens
+            if (items.size > 4) {
+                item {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Buscar prato pelo nome...") },
+                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                TextButton(onClick = { searchQuery = "" }) { Text("Limpar") }
+                            }
+                        },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+
+            items(filteredItems, key = { it.food.id }) { itemDisplay ->
                 val food = itemDisplay.food
-                val displayValue = draftQuantities[food.id] ?: savedQuantities[food.id].orEmpty()
+                val displayValue = draftQuantitiesMap[food.id] ?: savedQuantities[food.id].orEmpty()
                 ProductionInputCard(
                     food = food,
                     value = displayValue,
                     error = errors[food.id],
                     enabled = itemDisplay.podeEditar && saveStatus != SaveStatus.SAVING,
                     onValueChange = { newValue ->
-                        draftQuantities = draftQuantities + (food.id to newValue)
+                        draftQuantitiesMap[food.id] = newValue
                         errors.remove(food.id)
                     }
                 )
@@ -171,11 +241,11 @@ fun ProductionDayScreen(
                         Text(stringResource(R.string.action_view_closing))
                     }
                 } else {
-                    val activeDraft = items.filter { it.podeEditar }.associate { item ->
-                        item.food.id to (draftQuantities[item.food.id] ?: savedQuantities[item.food.id].orEmpty())
-                    }
                     Button(
                         onClick = {
+                            val activeDraft = items.filter { it.podeEditar }.associate { item ->
+                                item.food.id to (draftQuantitiesMap[item.food.id] ?: savedQuantities[item.food.id].orEmpty())
+                            }
                             val result = validarQuantidadesProducao(items, activeDraft, invalidNumberMessage)
                             errors.clear()
                             errors.putAll(result.errors)
@@ -183,7 +253,10 @@ fun ProductionDayScreen(
                                 onSave(result.quantities)
                             }
                         },
-                        enabled = activeDraft.values.any(String::isNotBlank) && saveStatus != SaveStatus.SAVING,
+                        enabled = items.filter { it.podeEditar }.any { item ->
+                            val v = draftQuantitiesMap[item.food.id] ?: savedQuantities[item.food.id]
+                            v.orEmpty().isNotBlank()
+                        } && saveStatus != SaveStatus.SAVING,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         if (saveStatus == SaveStatus.SAVING) {
@@ -225,16 +298,43 @@ private fun ProductionInputCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(food.nome, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Restaurant,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = food.nome,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = food.unidadeMedida,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
             }
+
             if (food.descricao.isNotBlank()) {
                 Text(
                     food.descricao,
@@ -242,6 +342,7 @@ private fun ProductionInputCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
             val isGram = food.unidadeMedida.equals("g", ignoreCase = true)
             OutlinedTextField(
                 value = value,
