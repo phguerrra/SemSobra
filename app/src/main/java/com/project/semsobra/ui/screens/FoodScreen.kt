@@ -224,11 +224,35 @@ fun FoodScreen(
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Text(
+                    "Unidade de medida",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val unidadesPadrao = listOf(
+                        "kg" to "Quilogramas (kg)",
+                        "g" to "Gramas (g)",
+                        "un" to "Unidades (un)",
+                        "L" to "Litros (L)",
+                        "ml" to "Mililitros (ml)"
+                    )
+                    unidadesPadrao.forEach { (code, label) ->
+                        FilterChip(
+                            selected = unidade.equals(code, ignoreCase = true),
+                            onClick = { unidade = code },
+                            label = { Text(label) }
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = unidade,
                     onValueChange = { unidade = it },
-                    label = { Text("Unidade de controle") },
-                    supportingText = { Text("Para buffet por kg, mantenha kg.") },
+                    label = { Text("Unidade de controle personalizada") },
+                    supportingText = { Text("Para buffet por kg, mantenha kg ou selecione gramas (g).") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

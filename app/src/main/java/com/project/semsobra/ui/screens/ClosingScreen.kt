@@ -380,12 +380,16 @@ private fun ClosingItemCard(
                 )
             )
             HorizontalDivider()
+            val isGram = display.food.unidadeMedida.equals("g", ignoreCase = true)
             OutlinedTextField(
                 value = leftover,
                 enabled = enabled,
                 onValueChange = { if (isDecimalInput(it)) onLeftoverChange(it) },
                 label = { Text(stringResource(R.string.label_leftover, display.food.unidadeMedida)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                placeholder = { Text(if (isGram) "Ex.: 250" else stringResource(R.string.hint_quantity)) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (isGram) KeyboardType.Number else KeyboardType.Decimal
+                ),
                 singleLine = true,
                 isError = leftoverError != null,
                 supportingText = leftoverError?.let { message -> { Text(message) } },

@@ -30,6 +30,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -524,60 +525,210 @@ fun ForecastItemCard(item: ForecastItem, explain: Boolean = false) {
 fun ProductionSummaryCard(
     summary: ProductionSummary,
     showItems: Boolean = false,
-    onEdit: (() -> Unit)? = null
+    onEdit: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
+    var expanded by remember { mutableStateOf(false) }
     val totalProduced = summary.items.sumOf { it.item.quantidadeProduzida }
     val totalLeftover = summary.items.sumOf { it.item.quantidadeSobra }
-    val wasteRatioText = if (totalProduced > 0) {
-        " (${formatPercentage(totalLeftover / totalProduced)} da produção)"
-    } else ""
+    val wastePercentage = if (totalProduced > 0) totalLeftover / totalProduced else 0.0
 
     val leftoversByUnit = summary.items
         .groupBy { it.food.unidadeMedida.trim().lowercase() }
         .mapValues { (_, items) -> QuantityPolicy.sum(items.map { it.item.quantidadeSobra }) }
         .entries
         .joinToString(" • ") { (unit, quantity) -> "${formatQuantity(quantity)} $unit" }
-        .ifBlank { "0" }
+        .ifBlank { "0 kg" }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shape = RoundedCornerShape(20.dp)
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                "${formatDate(summary.day.data)} - ${dayName(summary.day.diaDaSemana)}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text("Clientes atendidos: ${if (summary.day.clientesAtendidos > 0) summary.day.clientesAtendidos else "em aberto"}")
-            Text("Sobra total: $leftoversByUnit$wasteRatioText")
-            summary.day.alteradoEm?.let {
-                Text(
-                    "Fechamento corrigido em ${it.replace('T', ' ')}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.tertiary
-                )
-            }
-            if (showItems) {
-                HorizontalDivider()
-                summary.items.forEach { item ->
+            // Header do Dia
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
                     Text(
-                        "${item.food.nome}: produzido ${formatQuantity(item.item.quantidadeProduzida)}, " +
-                            "consumo ${formatQuantity(item.consumo)}, " +
-                            "sobra ${formatQuantity(item.item.quantidadeSobra)} " +
-                            item.food.unidadeMedida
+                        text = "${formatDate(summary.day.data)} (${dayName(summary.day.diaDaSemana)})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
                     )
-                    if (item.item.acabouAntesDoFim) {
-                        Text("Acabou antes do fim${item.item.horarioAcabou?.let { " às $it" }.orEmpty()}")
+                    summary.day.alteradoEm?.let {
+                        Text(
+                            "Corrigido em ${it.replace('T', ' ')}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (summary.fechado) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = if (summary.fechado) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Text(
+                        text = if (summary.fechado) "Fechado" else "Em Aberto",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // Métrica em Cards
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Clientes", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            if (summary.day.clientesAtendidos > 0) "${summary.day.clientesAtendidos} pessoas" else "-",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Sobra Total", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "$leftoversByUnit (${formatPercentage(wastePercentage)})",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (wastePercentage > 0.15) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             }
+
+            // Lista Expansível de Pratos
+            if (showItems && summary.items.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { expanded = !expanded }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Detalhamento de ${summary.items.size} pratos",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        if (expanded) "Recolher 🠅" else "Expandir 🠇",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (expanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        summary.items.forEach { item ->
+                            HistoryItemRow(item = item)
+                        }
+                    }
+                }
+            }
+
             if (onEdit != null && summary.fechado) {
-                TextButton(onClick = onEdit) { Text("Reabrir para corrigir") }
+                OutlinedButton(
+                    onClick = onEdit,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Reabrir histórico para corrigir")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryItemRow(item: com.project.semsobra.domain.model.ProductionItemDisplay) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    item.food.nome,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (item.item.acabouAntesDoFim) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "Faltou${item.item.horarioAcabou?.let { " às $it" }.orEmpty()}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Produzido: ${formatQuantity(item.item.quantidadeProduzida)} ${item.food.unidadeMedida}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Consumido: ${formatQuantity(item.consumo)} ${item.food.unidadeMedida}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Sobra: ${formatQuantity(item.item.quantidadeSobra)} ${item.food.unidadeMedida}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (item.item.quantidadeSobra > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

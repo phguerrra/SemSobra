@@ -242,13 +242,16 @@ private fun ProductionInputCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            val isGram = food.unidadeMedida.equals("g", ignoreCase = true)
             OutlinedTextField(
                 value = value,
                 enabled = enabled,
                 onValueChange = { if (isDecimalInput(it)) onValueChange(it) },
                 label = { Text(stringResource(R.string.label_quantity_produced, food.unidadeMedida)) },
-                placeholder = { Text(stringResource(R.string.hint_quantity)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                placeholder = { Text(if (isGram) "Ex.: 500" else stringResource(R.string.hint_quantity)) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (isGram) KeyboardType.Number else KeyboardType.Decimal
+                ),
                 singleLine = true,
                 isError = error != null,
                 supportingText = error?.let { message -> { Text(message) } },
