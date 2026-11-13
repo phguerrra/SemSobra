@@ -292,7 +292,13 @@ fun SimpleMetricRow(label: String, value: String) {
 private enum class StepState { COMPLETED, ACTIVE, UPCOMING }
 
 @Composable
-fun OperationStepCard(productionStatus: String, closingStatus: String) {
+fun OperationStepCard(
+    productionStatus: String,
+    closingStatus: String,
+    onOpenProduction: () -> Unit = {},
+    onOpenClosing: () -> Unit = {},
+    onOpenAnalysis: () -> Unit = {}
+) {
     val isProductionDone = productionStatus != "pendente"
     val isClosingDone = closingStatus == "fechado"
 
@@ -306,27 +312,40 @@ fun OperationStepCard(productionStatus: String, closingStatus: String) {
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                "Passos do dia",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Passos do dia",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Toque para navegar",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
             Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 TimelineStepItem(
                     title = "1. Preparo da comida",
-                    subtitle = if (isProductionDone) "Registrado ($productionStatus)" else "Informe o que foi preparado hoje",
+                    subtitle = if (isProductionDone) "Registrado ($productionStatus) • Toque para ver" else "Informe o que foi preparado hoje ➔",
                     icon = Icons.Filled.Restaurant,
                     state = if (isProductionDone) StepState.COMPLETED else StepState.ACTIVE,
-                    isLast = false
+                    isLast = false,
+                    onClick = onOpenProduction
                 )
                 TimelineStepItem(
                     title = "2. Fechamento e sobras",
                     subtitle = when {
-                        isClosingDone -> "Fechado com sucesso"
-                        isProductionDone -> "Informe o que sobrou no fim do dia"
-                        else -> "Aguardando o fim do serviço"
+                        isClosingDone -> "Fechado com sucesso • Toque para ver"
+                        isProductionDone -> "Informe o que sobrou no fim do dia ➔"
+                        else -> "Aguardando fim do serviço ➔"
                     },
                     icon = Icons.Filled.CheckCircle,
                     state = when {
@@ -334,14 +353,16 @@ fun OperationStepCard(productionStatus: String, closingStatus: String) {
                         isProductionDone -> StepState.ACTIVE
                         else -> StepState.UPCOMING
                     },
-                    isLast = false
+                    isLast = false,
+                    onClick = onOpenClosing
                 )
                 TimelineStepItem(
                     title = "3. Análise do dia",
-                    subtitle = "Relatório atualizado automaticamente",
+                    subtitle = "Relatório e previsão de amanhã ➔",
                     icon = Icons.Filled.Assessment,
                     state = if (isClosingDone) StepState.COMPLETED else StepState.UPCOMING,
-                    isLast = true
+                    isLast = true,
+                    onClick = onOpenAnalysis
                 )
             }
         }
@@ -354,10 +375,15 @@ private fun TimelineStepItem(
     subtitle: String,
     icon: ImageVector,
     state: StepState,
-    isLast: Boolean
+    isLast: Boolean,
+    onClick: () -> Unit = {}
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.Top
     ) {
         Column(

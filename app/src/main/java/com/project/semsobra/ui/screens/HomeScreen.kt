@@ -286,7 +286,10 @@ fun HomeScreen(
         item {
             OperationStepCard(
                 productionStatus = if (todaySummary == null) "pendente" else "${todaySummary.items.size} item(ns)",
-                closingStatus = if (todaySummary?.fechado == true) "fechado" else "em aberto"
+                closingStatus = if (todaySummary?.fechado == true) "fechado" else "em aberto",
+                onOpenProduction = onOpenProduction,
+                onOpenClosing = onOpenClosing,
+                onOpenAnalysis = onOpenAnalysis
             )
         }
         item { SectionTitle(stringResource(R.string.home_forecast_production, formattedForecastDate)) }

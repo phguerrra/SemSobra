@@ -37,12 +37,21 @@ import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Inventory
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.ui.components.MetricCard
+import com.project.semsobra.ui.components.StatusBadgeCard
 import com.project.semsobra.ui.components.ProductionSummaryCard
 import com.project.semsobra.ui.components.SectionTitle
 import com.project.semsobra.ui.components.SimpleMetricRow
@@ -429,47 +438,147 @@ private fun CalculationDetails(
     ) {
         item {
             HeaderCard(
-                title = "Como chegamos à recomendação",
-                value = "${previsaoDemanda.quantidadeRegistrosUtilizados} registros analisados",
-                subtitle = "Detalhes para você conferir a previsão."
+                title = "Entenda o cálculo passo a passo",
+                value = "${previsaoDemanda.quantidadeRegistrosUtilizados} dias analisados",
+                subtitle = "Veja de forma simples e transparente como o SemSobra calculou cada número."
             )
         }
-        item { EmptyState(previsaoDemanda.mensagem) }
-        item { SectionTitle("Dados considerados") }
+
         item {
-            SimpleMetricRow(
-                "Faixa de clientes",
-                "${previsaoDemanda.faixaHistoricaClientes.minimoEstimado} a " +
-                    previsaoDemanda.faixaHistoricaClientes.maximoEstimado
+            StatusBadgeCard(
+                title = "Como funciona a previsão?",
+                message = previsaoDemanda.mensagem,
+                icon = Icons.Filled.Info,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
+
+        item { SectionTitle("Passo a passo explicativo") }
+
+        // Passo 1: Clientes esperados
         item {
-            SimpleMetricRow(
-                "Consumo médio por cliente",
-                "${formatWeightOneDecimal(previsaoDemanda.consumoMedioKgPorCliente)} kg"
+            CalculationExplanationCard(
+                stepNumber = "1",
+                title = "Estimativa de Clientes",
+                value = "${previsaoDemanda.clientesPrevistos} clientes esperados",
+                explanation = "Calculamos que devem vir cerca de ${previsaoDemanda.clientesPrevistos} pessoas (com faixa estimada entre ${previsaoDemanda.faixaHistoricaClientes.minimoEstimado} e ${previsaoDemanda.faixaHistoricaClientes.maximoEstimado} clientes) com base nos dias similares do seu histórico."
             )
         }
+
+        // Passo 2: Consumo por cliente
         item {
-            SimpleMetricRow(
-                "Necessidade estimada",
-                "${formatWeightOneDecimal(previsaoDemanda.demandaPrevistaKg)} kg"
+            CalculationExplanationCard(
+                stepNumber = "2",
+                title = "Consumo Médio por Pessoa",
+                value = "${formatWeightOneDecimal(previsaoDemanda.consumoMedioKgPorCliente)} kg por cliente",
+                explanation = "Analisando as refeições e sobras registradas nos fechamentos anteriores, sabemos que cada cliente consome em média ${formatWeightOneDecimal(previsaoDemanda.consumoMedioKgPorCliente)} kg de comida."
             )
         }
-        item { SectionTitle("Margens aplicadas") }
+
+        // Passo 3: Necessidade Bruta
         item {
-            SimpleMetricRow(
-                "Margem de segurança",
-                formatPercentage(previsaoDemanda.margemSegurancaAplicada)
+            CalculationExplanationCard(
+                stepNumber = "3",
+                title = "Necessidade Real do Buffet",
+                value = "${formatWeightOneDecimal(previsaoDemanda.demandaPrevistaKg)} kg de comida",
+                explanation = "Multiplicamos o número de clientes pelo consumo médio (${previsaoDemanda.clientesPrevistos} clientes × ${formatWeightOneDecimal(previsaoDemanda.consumoMedioKgPorCliente)} kg = ${formatWeightOneDecimal(previsaoDemanda.demandaPrevistaKg)} kg de consumo estimado)."
             )
         }
+
+        // Passo 4: Margem de Segurança
         item {
-            SimpleMetricRow(
-                "Parcela colocada primeiro",
-                formatPercentage(previsaoDemanda.percentualProducaoInicialAplicado)
+            CalculationExplanationCard(
+                stepNumber = "4",
+                title = "Margem de Segurança (+${formatPercentage(previsaoDemanda.margemSegurancaAplicada)})",
+                value = "Total recomendado: ${formatWeightOneDecimal(previsaoDemanda.preparoRecomendadoKg)} kg",
+                explanation = "Adicionamos uma margem de ${formatPercentage(previsaoDemanda.margemSegurancaAplicada)} de comida extra por segurança. Assim, se o salão encher mais que o previsto, ninguém fica sem refeição!"
             )
         }
+
+        // Passo 5: Estratégia de Reposição
         item {
-            SimpleMetricRow("Confiança da previsão", previsaoDemanda.qualidade.label())
+            CalculationExplanationCard(
+                stepNumber = "5",
+                title = "Divisão Inteligente (75% Início + 25% Reserva)",
+                value = "Início: ${formatWeightOneDecimal(previsaoDemanda.producaoInicialKg)} kg  •  Reserva: ${formatWeightOneDecimal(previsaoDemanda.reservaReposicaoKg)} kg",
+                explanation = "Para evitar desperdícios em dias com movimento fraco, cozinhe ${formatWeightOneDecimal(previsaoDemanda.producaoInicialKg)} kg no início do serviço e mantenha ${formatWeightOneDecimal(previsaoDemanda.reservaReposicaoKg)} kg na reserva para repor só se necessário."
+            )
+        }
+
+        item { SectionTitle("Resumo dos indicadores") }
+
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    SimpleMetricRow("Faixa estimada de clientes", "${previsaoDemanda.faixaHistoricaClientes.minimoEstimado} a ${previsaoDemanda.faixaHistoricaClientes.maximoEstimado} pessoas")
+                    SimpleMetricRow("Consumo médio individual", "${formatWeightOneDecimal(previsaoDemanda.consumoMedioKgPorCliente)} kg")
+                    SimpleMetricRow("Necessidade sem margem", "${formatWeightOneDecimal(previsaoDemanda.demandaPrevistaKg)} kg")
+                    SimpleMetricRow("Margem de segurança extra", formatPercentage(previsaoDemanda.margemSegurancaAplicada))
+                    SimpleMetricRow("Produção inicial recomendada", formatPercentage(previsaoDemanda.percentualProducaoInicialAplicado))
+                    SimpleMetricRow("Confiança do cálculo", previsaoDemanda.qualidade.label())
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalculationExplanationCard(
+    stepNumber: String,
+    title: String,
+    value: String,
+    explanation: String
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(stepNumber, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = explanation,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -24,7 +24,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -34,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Surface
@@ -59,6 +63,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.navigation.AppRoute
 import com.project.semsobra.ui.model.disponivelNoDia
 import com.project.semsobra.ui.model.UiEvent
@@ -203,6 +208,9 @@ fun SemSobraApp(viewModel: SemSobraViewModel) {
                         if (route != currentRoute) {
                             navController.navigateToTopLevelRoute(route)
                         }
+                    },
+                    todaySummary = uiState.productionSummaries.firstOrNull {
+                        it.day.data == today.toString()
                     }
                 )
             }
@@ -285,10 +293,26 @@ private fun AppNavigation(
     NavHost(
         navController = navController,
         startDestination = AppRoute.Home.route,
-        enterTransition = { smoothEnterTransition() },
-        exitTransition = { smoothExitTransition() },
-        popEnterTransition = { smoothEnterTransition(fromEnd = false) },
-        popExitTransition = { smoothExitTransition(toStart = false) }
+        enterTransition = {
+            val initial = AppRoute.fromRoute(initialState.destination.route)
+            val target = AppRoute.fromRoute(targetState.destination.route)
+            smoothEnterTransition(fromEnd = target.ordinal >= initial.ordinal)
+        },
+        exitTransition = {
+            val initial = AppRoute.fromRoute(initialState.destination.route)
+            val target = AppRoute.fromRoute(targetState.destination.route)
+            smoothExitTransition(toStart = target.ordinal >= initial.ordinal)
+        },
+        popEnterTransition = {
+            val initial = AppRoute.fromRoute(initialState.destination.route)
+            val target = AppRoute.fromRoute(targetState.destination.route)
+            smoothEnterTransition(fromEnd = target.ordinal >= initial.ordinal)
+        },
+        popExitTransition = {
+            val initial = AppRoute.fromRoute(initialState.destination.route)
+            val target = AppRoute.fromRoute(targetState.destination.route)
+            smoothExitTransition(toStart = target.ordinal >= initial.ordinal)
+        }
     ) {
         composable(AppRoute.Home.route) {
             HomeScreen(
@@ -483,7 +507,11 @@ private fun InitialErrorState(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute) -> Unit) {
+private fun SemSobraBottomBar(
+    currentRoute: AppRoute,
+    onRouteSelected: (AppRoute) -> Unit,
+    todaySummary: ProductionSummary?
+) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 16.dp,
@@ -494,18 +522,51 @@ private fun SemSobraBottomBar(currentRoute: AppRoute, onRouteSelected: (AppRoute
             tonalElevation = 0.dp
         ) {
             AppRoute.entries.forEach { route ->
+                val showClosingBadge = route == AppRoute.Closing && todaySummary != null && !todaySummary.fechado
+                val showProductionBadge = route == AppRoute.Production && todaySummary != null
+
                 NavigationBarItem(
                     selected = route == currentRoute,
                     onClick = { onRouteSelected(route) },
                     icon = {
-                        Icon(
-                            imageVector = route.icon,
-                            contentDescription = route.title,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        if (showClosingBadge || showProductionBadge) {
+                            BadgedBox(
+                                badge = {
+                                    if (showClosingBadge) {
+                                        Badge(containerColor = MaterialTheme.colorScheme.tertiary) {
+                                            Text("!", fontWeight = FontWeight.Bold)
+                                        }
+                                    } else if (showProductionBadge) {
+                                        Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = route.icon,
+                                    contentDescription = route.title,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = route.icon,
+                                contentDescription = route.title,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     },
                     label = {
-                        Text(route.shortTitle, style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            route.shortTitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (route == currentRoute) FontWeight.Bold else FontWeight.Medium
+                        )
                     },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
