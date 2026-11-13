@@ -35,7 +35,6 @@ object ReportGenerator {
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_TEXT, buildWhatsAppSummaryText(summary))
                 clipData = ClipData.newRawUri("Relatório", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
@@ -109,7 +108,8 @@ object ReportGenerator {
 
     private fun generateReportBitmap(summary: ProductionSummary): Bitmap {
         val width = 800
-        val height = 1000 + (summary.items.size * 55)
+        val extraHeight = summary.items.sumOf { if (it.item.acabouAntesDoFim) 90 else 70 }
+        val height = 620 + extraHeight
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawReportCanvas(canvas, summary, width, height)
@@ -123,37 +123,40 @@ object ReportGenerator {
         val secondaryColor = Color.parseColor("#496457")
         val textDark = Color.parseColor("#171D1A")
         val textGray = Color.parseColor("#5A645E")
+        val margin = 35f
+        val usableWidth = width - (margin * 2f)
 
-        // Header Background
+        // Banner de Cabeçalho
+        val headerHeight = 160f
         val headerPaint = Paint().apply {
             color = primaryColor
             isAntiAlias = true
         }
-        val headerRect = RectF(0f, 0f, width.toFloat(), 180f)
+        val headerRect = RectF(0f, 0f, width.toFloat(), headerHeight)
         canvas.drawRect(headerRect, headerPaint)
 
-        // Header Text
+        // Título e Subtítulos do Cabeçalho
         val titlePaint = Paint().apply {
             color = Color.WHITE
-            textSize = 32f
+            textSize = if (width < 700) 26f else 30f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
-        canvas.drawText("SemSobra — Relatório Diário", 30f, 70f, titlePaint)
+        canvas.drawText("SemSobra", margin, 60f, titlePaint)
 
         val subtitlePaint = Paint().apply {
             color = Color.parseColor("#D3F5E5")
-            textSize = 20f
+            textSize = if (width < 700) 16f else 18f
             isAntiAlias = true
         }
-        val dateText = "Data: ${formatDate(summary.day.data)} (${dayName(summary.day.diaDaSemana)})"
-        canvas.drawText(dateText, 30f, 115f, subtitlePaint)
+        val dateText = "Relatório Diário • ${formatDate(summary.day.data)} (${dayName(summary.day.diaDaSemana)})"
+        canvas.drawText(dateText, margin, 110f, subtitlePaint)
 
         val customersText = if (summary.day.clientesAtendidos > 0) "${summary.day.clientesAtendidos} clientes atendidos" else "Serviço em aberto"
-        canvas.drawText(customersText, 30f, 150f, subtitlePaint)
+        canvas.drawText(customersText, margin, 138f, subtitlePaint)
 
-        // Metrics Banner
-        var currentY = 220f
+        // Métricas de Resumo
+        var currentY = 195f
         val totalProduced = summary.items.sumOf { it.item.quantidadeProduzida }
         val totalLeftover = summary.items.sumOf { it.item.quantidadeSobra }
         val totalConsumed = (totalProduced - totalLeftover).coerceAtLeast(0.0)
@@ -167,109 +170,137 @@ object ReportGenerator {
         val borderPaint = Paint().apply {
             color = Color.parseColor("#C1C9C3")
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = 1.5f
             isAntiAlias = true
         }
 
-        val cardWidth = (width - 80f) / 2f
+        val cardWidth = (usableWidth - 15f) / 2f
+        val cardHeight = 90f
 
-        // Card 1
-        val rect1 = RectF(30f, currentY, 30f + cardWidth, currentY + 110f)
-        canvas.drawRoundRect(rect1, 20f, 20f, cardBgPaint)
-        canvas.drawRoundRect(rect1, 20f, 20f, borderPaint)
+        // Card 1: Sobra Total
+        val rect1 = RectF(margin, currentY, margin + cardWidth, currentY + cardHeight)
+        canvas.drawRoundRect(rect1, 16f, 16f, cardBgPaint)
+        canvas.drawRoundRect(rect1, 16f, 16f, borderPaint)
 
         val cardLabelPaint = Paint().apply {
             color = textGray
-            textSize = 18f
+            textSize = if (width < 700) 15f else 17f
             isAntiAlias = true
         }
         val cardValuePaint = Paint().apply {
             color = primaryColor
-            textSize = 26f
+            textSize = if (width < 700) 20f else 24f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
 
-        canvas.drawText("Sobra Total", 50f, currentY + 40f, cardLabelPaint)
-        canvas.drawText("${formatQuantity(totalLeftover)} (${formatWeightOneDecimal(wasteRatio)}%)", 50f, currentY + 85f, cardValuePaint)
+        canvas.drawText("Sobra Total", margin + 18f, currentY + 32f, cardLabelPaint)
+        canvas.drawText("${formatQuantity(totalLeftover)} (${formatWeightOneDecimal(wasteRatio)}%)", margin + 18f, currentY + 70f, cardValuePaint)
 
-        // Card 2
-        val rect2 = RectF(50f + cardWidth, currentY, width - 30f, currentY + 110f)
-        canvas.drawRoundRect(rect2, 20f, 20f, cardBgPaint)
-        canvas.drawRoundRect(rect2, 20f, 20f, borderPaint)
+        // Card 2: Aproveitamento
+        val rect2 = RectF(margin + cardWidth + 15f, currentY, margin + (cardWidth * 2f) + 15f, currentY + cardHeight)
+        canvas.drawRoundRect(rect2, 16f, 16f, cardBgPaint)
+        canvas.drawRoundRect(rect2, 16f, 16f, borderPaint)
 
-        canvas.drawText("Aproveitamento", 70f + cardWidth, currentY + 40f, cardLabelPaint)
-        canvas.drawText("${formatWeightOneDecimal(efficiency)}%", 70f + cardWidth, currentY + 85f, cardValuePaint)
+        canvas.drawText("Aproveitamento", margin + cardWidth + 33f, currentY + 32f, cardLabelPaint)
+        canvas.drawText("${formatWeightOneDecimal(efficiency)}%", margin + cardWidth + 33f, currentY + 70f, cardValuePaint)
 
-        currentY += 150f
+        currentY += cardHeight + 45f
 
-        // Table Header
+        // Seção da Tabela
         val sectionTitlePaint = Paint().apply {
             color = textDark
-            textSize = 24f
+            textSize = if (width < 700) 20f else 22f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
-        canvas.drawText("Detalhamento de Pratos", 30f, currentY, sectionTitlePaint)
-        currentY += 20f
+        canvas.drawText("Detalhamento dos Pratos", margin, currentY, sectionTitlePaint)
+        currentY += 24f
 
-        val linePaint = Paint().apply {
-            color = Color.parseColor("#C1C9C3")
-            strokeWidth = 2f
+        // Colunas centralizadas e proporcionais
+        val col1Left = margin + 18f
+        val col2Center = margin + (usableWidth * 0.45f)
+        val col3Center = margin + (usableWidth * 0.68f)
+        val col4Center = margin + (usableWidth * 0.88f)
+
+        // Fundo do Cabeçalho da Tabela
+        val tableHeaderBgPaint = Paint().apply {
+            color = Color.parseColor("#E2EAE5")
+            isAntiAlias = true
         }
-        canvas.drawLine(30f, currentY, width - 30f, currentY, linePaint)
-        currentY += 35f
+        val headerBgRect = RectF(margin, currentY, width - margin, currentY + 40f)
+        canvas.drawRoundRect(headerBgRect, 10f, 10f, tableHeaderBgPaint)
 
-        val tableHeaderPaint = Paint().apply {
+        val headerLeftPaint = Paint().apply {
             color = secondaryColor
-            textSize = 18f
+            textSize = if (width < 700) 15f else 17f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
             isAntiAlias = true
         }
-        canvas.drawText("Prato", 40f, currentY, tableHeaderPaint)
-        canvas.drawText("Produzido", 360f, currentY, tableHeaderPaint)
-        canvas.drawText("Sobra", 520f, currentY, tableHeaderPaint)
-        canvas.drawText("Consumo", 660f, currentY, tableHeaderPaint)
+        val headerCenterPaint = Paint().apply {
+            color = secondaryColor
+            textSize = if (width < 700) 15f else 17f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            isAntiAlias = true
+        }
 
-        currentY += 15f
-        canvas.drawLine(30f, currentY, width - 30f, currentY, linePaint)
-        currentY += 35f
+        canvas.drawText("Prato", col1Left, currentY + 26f, headerLeftPaint)
+        canvas.drawText("Produzido", col2Center, currentY + 26f, headerCenterPaint)
+        canvas.drawText("Sobra", col3Center, currentY + 26f, headerCenterPaint)
+        canvas.drawText("Consumo", col4Center, currentY + 26f, headerCenterPaint)
 
-        // Table Rows
-        val rowTextPaint = Paint().apply {
+        currentY += 65f
+
+        // Linhas dos Pratos
+        val linePaint = Paint().apply {
+            color = Color.parseColor("#E0E6E2")
+            strokeWidth = 1.5f
+        }
+        val rowLeftPaint = Paint().apply {
             color = textDark
-            textSize = 19f
+            textSize = if (width < 700) 15f else 17f
+            textAlign = Paint.Align.LEFT
+            isAntiAlias = true
+        }
+        val rowCenterPaint = Paint().apply {
+            color = textDark
+            textSize = if (width < 700) 15f else 17f
+            textAlign = Paint.Align.CENTER
             isAntiAlias = true
         }
         val alertTextPaint = Paint().apply {
             color = Color.parseColor("#BA1A1A")
-            textSize = 15f
+            textSize = if (width < 700) 13f else 14f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.LEFT
             isAntiAlias = true
         }
 
+        val maxNameLen = if (width < 700) 14 else 20
+
         summary.items.forEach { display ->
-            canvas.drawText(display.food.nome.take(22), 40f, currentY, rowTextPaint)
-            canvas.drawText("${formatQuantity(display.item.quantidadeProduzida)} ${display.food.unidadeMedida}", 360f, currentY, rowTextPaint)
-            canvas.drawText("${formatQuantity(display.item.quantidadeSobra)} ${display.food.unidadeMedida}", 520f, currentY, rowTextPaint)
-            canvas.drawText("${formatQuantity(display.consumo)} ${display.food.unidadeMedida}", 660f, currentY, rowTextPaint)
+            val displayName = if (display.food.nome.length > maxNameLen) {
+                display.food.nome.take(maxNameLen - 1) + "…"
+            } else {
+                display.food.nome
+            }
+
+            canvas.drawText(displayName, col1Left, currentY, rowLeftPaint)
+            canvas.drawText("${formatQuantity(display.item.quantidadeProduzida)} ${display.food.unidadeMedida}", col2Center, currentY, rowCenterPaint)
+            canvas.drawText("${formatQuantity(display.item.quantidadeSobra)} ${display.food.unidadeMedida}", col3Center, currentY, rowCenterPaint)
+            canvas.drawText("${formatQuantity(display.consumo)} ${display.food.unidadeMedida}", col4Center, currentY, rowCenterPaint)
 
             if (display.item.acabouAntesDoFim) {
                 currentY += 22f
                 val timeStr = display.item.horarioAcabou?.takeIf { it.isNotBlank() }?.let { " às $it" } ?: ""
-                canvas.drawText("⚠️ Acabou antes do fim$timeStr", 40f, currentY, alertTextPaint)
+                canvas.drawText("⚠️ Acabou antes do fim$timeStr", col1Left, currentY, alertTextPaint)
             }
 
-            currentY += 35f
-            canvas.drawLine(30f, currentY - 15f, width - 30f, currentY - 15f, linePaint)
+            currentY += 20f
+            canvas.drawLine(margin, currentY, width - margin, currentY, linePaint)
+            currentY += 45f
         }
-
-        // Footer
-        val footerPaint = Paint().apply {
-            color = textGray
-            textSize = 16f
-            isAntiAlias = true
-        }
-        canvas.drawText("SemSobra — Gestão Inteligente e Combate ao Desperdício 🍃", 30f, height - 30f, footerPaint)
     }
 }
