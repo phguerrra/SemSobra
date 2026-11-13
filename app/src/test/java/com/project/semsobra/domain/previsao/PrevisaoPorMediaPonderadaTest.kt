@@ -6,6 +6,8 @@ import com.project.semsobra.domain.previsao.model.QualidadePrevisao
 import com.project.semsobra.domain.previsao.model.RegistroHistoricoDemanda
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
+import com.project.semsobra.domain.previsao.model.calcularQuintoDiaUtil
+import com.project.semsobra.domain.previsao.model.ehPeriodoPagamento5DiaUtil
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -211,15 +213,152 @@ class PrevisaoPorMediaPonderadaTest {
         assertEquals(50.0, resultado.demandaPrevistaKg, 0.001)
     }
 
+    @Test
+    fun `pondera com peso maior dia da semana equivalente no modo fallback`() {
+        // dataPrevisao é uma Segunda-Feira (2026-09-14)
+        // Historico com 2 Terças-Feiras, 1 Quarta-Feira e 1 Segunda-Feira (mesmo turno, mas apenas 1 segunda-feira)
+        val segunda = registro(data = dataPrevisao.minusDays(7), clientes = 200, vendidos = 100.0) // Segunda
+        val terca1 = registro(data = dataPrevisao.minusDays(6), clientes = 100, vendidos = 50.0) // Terça
+        val terca2 = registro(data = dataPrevisao.minusDays(13), clientes = 100, vendidos = 50.0) // Terça
+        val quarta = registro(data = dataPrevisao.minusDays(5), clientes = 100, vendidos = 50.0) // Quarta
+
+        val resultado = calcular(listOf(terca2, segunda, terca1, quarta))
+
+        // Como a Segunda-Feira recebe multiplicador 2.5x por corresponder ao dia da semana alvo,
+        // a média de clientes previstos pende fortemente em direção aos 200 clientes da segunda-feira
+        assertTrue("Esperava clientes previstos maior que 125 devido ao peso do dia equivalente, foi ${resultado.clientesPrevistos}", resultado.clientesPrevistos > 125)
+    }
+
+    @Test
+    fun `ignora ou reduz peso de feriados atipicos ao prever dia normal`() {
+        val regular1 = registro(data = dataPrevisao.minusWeeks(4), clientes = 100, vendidos = 50.0)
+        val regular2 = registro(data = dataPrevisao.minusWeeks(3), clientes = 100, vendidos = 50.0)
+        val regular3 = registro(data = dataPrevisao.minusWeeks(2), clientes = 100, vendidos = 50.0)
+        val feriado = registro(data = dataPrevisao.minusWeeks(1), clientes = 300, vendidos = 150.0).copy(ehFeriadoOuAtipico = true)
+
+        // Ao prever um dia normal sem considerar feriados (considerarFeriadosEAtipicos = false), o feriado é filtrado se houver histórico regular suficiente
+        val resultadoSemFeriado = calcular(
+            historico = listOf(regular1, regular2, regular3, feriado),
+            considerarFeriadosEAtipicos = false
+        )
+        assertEquals(100, resultadoSemFeriado.clientesPrevistos)
+    }
+
+    @Test
+    fun `prioriza registros de feriado quando a previsao e para dia atipico`() {
+        val regular = registro(data = dataPrevisao.minusWeeks(2), clientes = 100, vendidos = 50.0)
+        val feriadoAntigo = registro(data = dataPrevisao.minusWeeks(3), clientes = 250, vendidos = 125.0).copy(ehFeriadoOuAtipico = true)
+        val feriadoRecente = registro(data = dataPrevisao.minusWeeks(1), clientes = 300, vendidos = 150.0).copy(ehFeriadoOuAtipico = true)
+
+        // Previsão para dia atípico / feriado (ehDiaFeriadoOuAtipico = true)
+        val resultadoFeriado = calcular(
+            historico = listOf(feriadoAntigo, regular, feriadoRecente),
+            ehDiaFeriadoOuAtipico = true
+        )
+
+        // Os registros de feriado recebem peso 3.0x, puxando a previsão para a faixa dos feriados (250~300)
+        assertTrue("Esperava clientes previstos próximo a 250~300 para feriado, foi ${resultadoFeriado.clientesPrevistos}", resultadoFeriado.clientesPrevistos >= 240)
+        assertTrue(resultadoFeriado.mensagem.contains("feriado", ignoreCase = true))
+    }
+
+    @Test
+    fun `zera demanda quando restaurante nao abre aos domingos`() {
+        val domingo = LocalDate.of(2026, 9, 20) // Domingo
+        val historico = tresRegistrosIguais(clientes = 100, vendidos = 50.0)
+
+        val resultado = motor.calcular(
+            EntradaPrevisao(
+                dataPrevisao = domingo,
+                turno = Turno.ALMOCO,
+                historico = historico,
+                restauranteAbertoAosDomingos = false
+            )
+        )
+
+        assertEquals(0, resultado.clientesPrevistos)
+        assertEquals(0.0, resultado.demandaPrevistaKg, 0.001)
+        assertTrue(resultado.mensagem.contains("não abre aos domingos", ignoreCase = true))
+    }
+
+    @Test
+    fun `calcula quinto dia util do mes corretamente`() {
+        // Novembro de 2026: dia 1 é Domingo.
+        // 1º DU = 2 (Seg), 2º DU = 3 (Ter), 3º DU = 4 (Qua), 4º DU = 5 (Qui), 5º DU = 6 (Sex)
+        val dataNovembro = LocalDate.of(2026, 11, 6)
+        val quintoDiaUtil = dataNovembro.calcularQuintoDiaUtil()
+
+        assertEquals(LocalDate.of(2026, 11, 6), quintoDiaUtil)
+        assertTrue(dataNovembro.ehPeriodoPagamento5DiaUtil())
+    }
+
+    @Test
+    fun `reduz estimativa de clientes quando ha previsao de chuva`() {
+        val historico = tresRegistrosIguais(clientes = 100, vendidos = 50.0)
+
+        val resultadoSemChuva = motor.calcular(
+            EntradaPrevisao(
+                dataPrevisao = dataPrevisao,
+                turno = Turno.ALMOCO,
+                historico = historico,
+                climaPrevisto = com.project.semsobra.domain.previsao.model.CondicaoClima.ENSOLARADO
+            )
+        )
+
+        val resultadoComChuva = motor.calcular(
+            EntradaPrevisao(
+                dataPrevisao = dataPrevisao,
+                turno = Turno.ALMOCO,
+                historico = historico,
+                climaPrevisto = com.project.semsobra.domain.previsao.model.CondicaoClima.CHUVOSO
+            )
+        )
+
+        assertTrue(
+            "Esperava menor demanda na chuva (${resultadoComChuva.clientesPrevistos}) em relação ao sol (${resultadoSemChuva.clientesPrevistos})",
+            resultadoComChuva.clientesPrevistos < resultadoSemChuva.clientesPrevistos
+        )
+    }
+
+    @Test
+    fun `aumenta estimativa de clientes no periodo do quinto dia util`() {
+        // 6 de Novembro de 2026 (5º dia útil de Novembro/2026)
+        val dataPagamento = LocalDate.of(2026, 11, 6)
+        val historico = (1L..3L).map { semanas ->
+            registro(
+                data = LocalDate.of(2026, 10, 15).minusWeeks(semanas), // Meio do mês de Outubro
+                clientes = 100,
+                vendidos = 50.0
+            )
+        }
+
+        val resultadoPagamento = motor.calcular(
+            EntradaPrevisao(
+                dataPrevisao = dataPagamento,
+                turno = Turno.ALMOCO,
+                historico = historico,
+                ehPeriodoPagamento = true
+            )
+        )
+
+        assertTrue(
+            "Esperava estimativa de clientes maior no período de pagamento (recebeu ${resultadoPagamento.clientesPrevistos})",
+            resultadoPagamento.clientesPrevistos > 100
+        )
+    }
+
     private fun calcular(
         historico: List<RegistroHistoricoDemanda>,
-        margemSeguranca: Double = EntradaPrevisao.MARGEM_SEGURANCA_PADRAO
+        margemSeguranca: Double = EntradaPrevisao.MARGEM_SEGURANCA_PADRAO,
+        ehDiaFeriadoOuAtipico: Boolean = false,
+        considerarFeriadosEAtipicos: Boolean = true
     ): ResultadoPrevisao = motor.calcular(
         EntradaPrevisao(
             dataPrevisao = dataPrevisao,
             turno = Turno.ALMOCO,
             historico = historico,
-            margemSeguranca = margemSeguranca
+            margemSeguranca = margemSeguranca,
+            ehDiaFeriadoOuAtipico = ehDiaFeriadoOuAtipico,
+            considerarFeriadosEAtipicos = considerarFeriadosEAtipicos
         )
     )
 

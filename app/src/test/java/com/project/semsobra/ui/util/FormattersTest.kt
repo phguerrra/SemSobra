@@ -71,4 +71,20 @@ class FormattersTest {
         assertNull(parseDoubleOrNull("NaN"))
         assertNull(parseDoubleOrNull("Infinity"))
     }
+
+    @Test
+    fun `filtra caracteres em entradas decimais`() {
+        assertEquals("12,5", filterDecimalInput("12,5"))
+        assertEquals("12.5", filterDecimalInput("12.5"))
+        assertEquals("12,53", filterDecimalInput("12,5,3a"))
+        assertEquals("10", filterDecimalInput("abc10xyz"))
+        assertEquals("0,5", filterDecimalInput("-0,5"))
+    }
+
+    @Test
+    fun `filtra caracteres em entradas inteiras`() {
+        assertEquals("150", filterIntegerInput("150"))
+        assertEquals("1505", filterIntegerInput("150.5a"))
+        assertEquals("1000", filterIntegerInput("1.000"))
+    }
 }

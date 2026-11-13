@@ -12,7 +12,7 @@ private val decimalInputPattern = Regex("[0-9]*(?:[.,][0-9]*)?")
 // Aceita estados intermediários de digitação; a validação do valor ocorre ao salvar.
 fun isDecimalInput(value: String): Boolean = decimalInputPattern.matches(value)
 
-fun isIntegerInput(value: String): Boolean = value.all { it in '0'..'9' }
+fun isIntegerInput(value: String): Boolean = value.all { (it in '0'..'9') }
 
 fun parseDoubleOrNull(value: String): Double? = value
     .trim()
@@ -20,6 +20,24 @@ fun parseDoubleOrNull(value: String): Double? = value
     .toDoubleOrNull()
     ?.takeIf(Double::isFinite)
     ?.let(QuantityPolicy::normalize)
+
+fun filterDecimalInput(input: String): String {
+    val sb = StringBuilder()
+    var hasSeparator = false
+    for (ch in input) {
+        if (ch.isDigit()) {
+            sb.append(ch)
+        } else if ((ch == ',' || ch == '.') && !hasSeparator) {
+            sb.append(ch)
+            hasSeparator = true
+        }
+    }
+    return sb.toString()
+}
+
+fun filterIntegerInput(input: String): String {
+    return input.filter { it.isDigit() }
+}
 
 fun formatInput(value: Double): String =
     QuantityPolicy.normalize(value).let { normalized ->

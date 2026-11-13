@@ -14,12 +14,15 @@ import com.project.semsobra.domain.exception.PreparoIndisponivelException
 import com.project.semsobra.domain.exception.ProducaoFechadaException
 import com.project.semsobra.domain.exception.ProducaoDesatualizadaException
 import com.project.semsobra.domain.model.AnalyticsResult
+import com.project.semsobra.domain.model.Cidade
 import com.project.semsobra.domain.model.Preparo
 import com.project.semsobra.domain.model.ProducaoDia
 import com.project.semsobra.domain.model.ProductionItemDisplay
 import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.ProductionSummary
+import com.project.semsobra.data.remote.OpenMeteoWeatherService
 import com.project.semsobra.domain.previsao.MotorPrevisao
+import com.project.semsobra.domain.previsao.model.CondicaoClima
 import com.project.semsobra.domain.previsao.model.EntradaPrevisao
 import com.project.semsobra.domain.previsao.model.ResultadoPrevisao
 import com.project.semsobra.domain.previsao.model.Turno
@@ -56,6 +59,8 @@ data class SemSobraUiState(
     val foods: List<FoodUiModel> = emptyList(),
     val productionSummaries: List<ProductionSummary> = emptyList(),
     val analytics: AnalyticsResult = AnalyticsResult.vazio(),
+    val climaPrevisto: CondicaoClima = CondicaoClima.ENSOLARADO,
+    val cidadeSelecionada: Cidade = Cidade.SANTIAGO_RS,
     val foodSaveStatus: SaveStatus = SaveStatus.IDLE,
     val productionSaveStatus: SaveStatus = SaveStatus.IDLE,
     val foodDeleteStatus: SaveStatus = SaveStatus.IDLE,
@@ -89,7 +94,8 @@ class SemSobraViewModel(
     private val motorPrevisao: MotorPrevisao,
     private val calculadoraAnalytics: CalculadoraAnalytics,
     private val historicoMapper: HistoricoProducaoMapper,
-    private val backupRepository: SemSobraBackupRepository
+    private val backupRepository: SemSobraBackupRepository,
+    private val weatherService: OpenMeteoWeatherService = OpenMeteoWeatherService()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -533,9 +539,25 @@ class SemSobraViewModel(
         Log.e(LOG_TAG, "Falha inesperada ao $operation", error)
     }
 
+    fun selecionarCidade(cidade: Cidade) {
+        if (_uiState.value.cidadeSelecionada == cidade) return
+        _uiState.value = _uiState.value.copy(cidadeSelecionada = cidade)
+        viewModelScope.launch {
+            updateState(_uiState.value.foods, _uiState.value.productionSummaries)
+        }
+    }
+
     private suspend fun updateState(foods: List<FoodUiModel>, summaries: List<ProductionSummary>) {
+        val dataPrevisao = LocalDate.now().plusDays(1)
+        val cidade = _uiState.value.cidadeSelecionada
+        val climaPrevisto = weatherService.buscarPrevisaoClima(
+            latitude = cidade.latitude,
+            longitude = cidade.longitude,
+            data = dataPrevisao
+        )
+
         val derivedState = withContext(Dispatchers.Default) {
-            val previsaoDemanda = calcularPrevisaoDemanda(summaries)
+            val previsaoDemanda = calcularPrevisaoDemanda(summaries, climaPrevisto)
             val foodsNaDataPrevista = foods.filter {
                 it.disponivelNoDia(previsaoDemanda.dataPrevisao.dayOfWeek.value)
             }
@@ -552,7 +574,8 @@ class SemSobraViewModel(
             previsaoDemanda = derivedState.previsaoDemanda,
             foods = foods,
             productionSummaries = summaries,
-            analytics = derivedState.analytics
+            analytics = derivedState.analytics,
+            climaPrevisto = climaPrevisto
         )
     }
 
@@ -597,12 +620,14 @@ class SemSobraViewModel(
     }
 
     private fun calcularPrevisaoDemanda(
-        summaries: List<ProductionSummary>
+        summaries: List<ProductionSummary>,
+        climaPrevisto: CondicaoClima = CondicaoClima.ENSOLARADO
     ): ResultadoPrevisao = motorPrevisao.calcular(
         EntradaPrevisao(
             dataPrevisao = LocalDate.now().plusDays(1),
             turno = Turno.ALMOCO,
-            historico = historicoMapper.mapear(summaries)
+            historico = historicoMapper.mapear(summaries),
+            climaPrevisto = climaPrevisto
         )
     )
 

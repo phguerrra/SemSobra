@@ -38,6 +38,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.project.semsobra.R
+import com.project.semsobra.domain.model.AnalyticsResult
+import com.project.semsobra.domain.model.Cidade
+import com.project.semsobra.domain.model.ProductionSummary
+import com.project.semsobra.domain.previsao.model.CondicaoClima
+import com.project.semsobra.ui.components.CitySelectorCard
 import com.project.semsobra.ui.components.EmptyState
 import com.project.semsobra.ui.components.ForecastItemCard
 import com.project.semsobra.ui.components.HeaderCard
@@ -45,9 +50,7 @@ import com.project.semsobra.ui.components.MetricCard
 import com.project.semsobra.ui.components.OperationStepCard
 import com.project.semsobra.ui.components.ProductionSummaryCard
 import com.project.semsobra.ui.components.SectionTitle
-import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.ui.model.FoodUiModel
-import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatDate
 import java.time.LocalDate
@@ -58,6 +61,9 @@ fun HomeScreen(
     forecastDate: LocalDate,
     foods: List<FoodUiModel>,
     summaries: List<ProductionSummary>,
+    cidadeAtual: Cidade = Cidade.SANTIAGO_RS,
+    climaPrevisto: CondicaoClima = CondicaoClima.ENSOLARADO,
+    onCidadeSelecionada: (Cidade) -> Unit = {},
     onOpenProduction: () -> Unit,
     onOpenClosing: () -> Unit,
     onOpenAnalysis: () -> Unit,
@@ -94,6 +100,14 @@ fun HomeScreen(
                 subtitle = "Acompanhe e registre a produção e as sobras do seu buffet.",
                 progressPercent = progressPercent,
                 progressLabel = progressLabel
+            )
+        }
+
+        item {
+            CitySelectorCard(
+                cidadeAtual = cidadeAtual,
+                climaPrevisto = climaPrevisto,
+                onCidadeSelecionada = onCidadeSelecionada
             )
         }
 

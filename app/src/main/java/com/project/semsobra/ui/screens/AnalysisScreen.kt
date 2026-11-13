@@ -12,11 +12,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
@@ -50,8 +50,8 @@ import com.project.semsobra.domain.model.AnalyticsResult
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.domain.model.ItemProducao
 import com.project.semsobra.domain.model.QuantityPolicy
-import com.project.semsobra.domain.usecase.ValidarDadosProducaoUseCase
-import com.project.semsobra.R
+import com.project.semsobra.ui.util.filterDecimalInput
+import com.project.semsobra.ui.util.filterIntegerInput
 import com.project.semsobra.ui.util.formatQuantity
 import com.project.semsobra.ui.util.formatDate
 import com.project.semsobra.ui.util.formatPercentage
@@ -61,8 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import com.project.semsobra.ui.util.dayName
 import com.project.semsobra.ui.util.formatInput
 import com.project.semsobra.ui.util.parseDoubleOrNull
-import com.project.semsobra.ui.util.isDecimalInput
-import com.project.semsobra.ui.util.isIntegerInput
 import com.project.semsobra.ui.SaveStatus
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -74,31 +72,21 @@ fun AnalysisScreen(
     summaries: List<ProductionSummary>,
     saveStatus: SaveStatus,
     onSaveHistory: (Long, Int, List<ItemProducao>) -> Unit,
-    onSaveHistoryResultConsumed: () -> Unit,
+    onSaveHistoryResultConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val editingSummary = summaries.firstOrNull { it.day.id == editingId }
+    var editingSummary by remember { mutableStateOf<ProductionSummary?>(null) }
     var pendingReopen by remember { mutableStateOf<ProductionSummary?>(null) }
-    var historySaveRequested by rememberSaveable { mutableStateOf(false) }
     val report = analytics.report
     val totalFaltas = report.alimentosQueMaisAcabaram.sumOf { it.quantidade }.toInt()
     val totalSobras = report.totalSobrasPorUnidade
         .joinToString(" • ") { "${formatQuantity(it.quantidade)} ${it.unidadeMedida}" }
         .ifBlank { "0" }
 
-    LaunchedEffect(saveStatus, historySaveRequested) {
-        if (historySaveRequested) {
-            when (saveStatus) {
-                SaveStatus.SUCCESS -> {
-                    editingId = null
-                    historySaveRequested = false
-                    onSaveHistoryResultConsumed()
-                }
-                SaveStatus.ERROR -> historySaveRequested = false
-                else -> Unit
-            }
+    LaunchedEffect(saveStatus) {
+        if (saveStatus == SaveStatus.SUCCESS) {
+            onSaveHistoryResultConsumed()
         }
     }
 
@@ -106,17 +94,10 @@ fun AnalysisScreen(
         HistoryEditDialog(
             summary = summary,
             saving = saveStatus == SaveStatus.SAVING,
-            saveFailed = saveStatus == SaveStatus.ERROR,
-            onDismiss = {
-                if (saveStatus != SaveStatus.SAVING) {
-                    editingId = null
-                    historySaveRequested = false
-                    onSaveHistoryResultConsumed()
-                }
-            },
+            onDismiss = { if (saveStatus != SaveStatus.SAVING) editingSummary = null },
             onSave = { customers, items ->
-                historySaveRequested = true
                 onSaveHistory(summary.day.id, customers, items)
+                editingSummary = null
             }
         )
     }
@@ -126,9 +107,7 @@ fun AnalysisScreen(
             onDismiss = { pendingReopen = null },
             onConfirm = {
                 pendingReopen = null
-                onSaveHistoryResultConsumed()
-                historySaveRequested = false
-                editingId = summary.day.id
+                editingSummary = summary
             }
         )
     }
@@ -150,7 +129,7 @@ fun AnalysisScreen(
         if (selectedTab == 2) {
             AnalysisHistory(
                 summaries = summaries,
-                onEdit = { if (saveStatus != SaveStatus.SAVING) pendingReopen = it },
+                onEdit = { pendingReopen = it },
                 modifier = Modifier.fillMaxSize()
             )
             return@Column
@@ -531,27 +510,28 @@ private fun AnalysisHistory(
 private fun HistoryEditDialog(
     summary: ProductionSummary,
     saving: Boolean,
-    saveFailed: Boolean,
     onDismiss: () -> Unit,
     onSave: (Int, List<ItemProducao>) -> Unit
 ) {
-    var customers by rememberSaveable(summary.day.id) {
+    var customers by remember(summary.day.id) {
         mutableStateOf(summary.day.clientesAtendidos.toString())
     }
-    var produced by rememberSaveable(summary.day.id) {
-        mutableStateOf(summary.items.associate { it.item.id to formatInput(it.item.quantidadeProduzida) })
+    val produced = remember(summary.day.id) {
+        mutableStateMapOf<Long, String>().apply {
+            summary.items.forEach { put(it.item.id, formatInput(it.item.quantidadeProduzida)) }
+        }
     }
-    var leftovers by rememberSaveable(summary.day.id) {
-        mutableStateOf(summary.items.associate { it.item.id to formatInput(it.item.quantidadeSobra) })
+    val leftovers = remember(summary.day.id) {
+        mutableStateMapOf<Long, String>().apply {
+            summary.items.forEach { put(it.item.id, formatInput(it.item.quantidadeSobra)) }
+        }
     }
-    var shortages by rememberSaveable(summary.day.id) {
-        mutableStateOf(summary.items.associate { it.item.id to it.item.acabouAntesDoFim })
+    val shortages = remember(summary.day.id) {
+        mutableStateMapOf<Long, Boolean>().apply {
+            summary.items.forEach { put(it.item.id, it.item.acabouAntesDoFim) }
+        }
     }
-    var shortageTimes by rememberSaveable(summary.day.id) {
-        mutableStateOf(summary.items.associate { it.item.id to it.item.horarioAcabou.orEmpty() })
-    }
-    val validator = remember { ValidarDadosProducaoUseCase() }
-    var error by rememberSaveable(summary.day.id) { mutableStateOf<String?>(null) }
+    var error by remember(summary.day.id) { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -567,15 +547,12 @@ private fun HistoryEditDialog(
                 item {
                     OutlinedTextField(
                         value = customers,
-                        onValueChange = {
-                            if (isIntegerInput(it)) {
-                                customers = it
-                                error = null
-                            }
+                        onValueChange = { raw ->
+                            customers = filterIntegerInput(raw)
+                            error = null
                         },
                         label = { Text("Clientes atendidos") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        enabled = !saving,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -585,69 +562,36 @@ private fun HistoryEditDialog(
                         Text(display.food.nome, fontWeight = FontWeight.Bold)
                         OutlinedTextField(
                             value = produced[display.item.id].orEmpty(),
-                            onValueChange = {
-                                if (isDecimalInput(it)) {
-                                    produced = produced + (display.item.id to it)
-                                    error = null
-                                }
+                            onValueChange = { raw ->
+                                produced[display.item.id] = filterDecimalInput(raw)
+                                error = null
                             },
                             label = { Text("Quantidade produzida (${display.food.unidadeMedida})") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            enabled = !saving,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
                         OutlinedTextField(
                             value = leftovers[display.item.id].orEmpty(),
-                            onValueChange = {
-                                if (isDecimalInput(it)) {
-                                    leftovers = leftovers + (display.item.id to it)
-                                    error = null
-                                }
+                            onValueChange = { raw ->
+                                leftovers[display.item.id] = filterDecimalInput(raw)
+                                error = null
                             },
                             label = { Text("Sobra (${display.food.unidadeMedida})") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            enabled = !saving,
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
                         Row {
                             Checkbox(
                                 checked = shortages[display.item.id] == true,
-                                enabled = !saving,
-                                onCheckedChange = {
-                                    shortages = shortages + (display.item.id to it)
-                                    if (!it) shortageTimes = shortageTimes + (display.item.id to "")
-                                    error = null
-                                }
+                                onCheckedChange = { shortages[display.item.id] = it }
                             )
                             Text("Acabou antes do fim", modifier = Modifier.padding(top = 12.dp))
-                        }
-                        if (shortages[display.item.id] == true) {
-                            OutlinedTextField(
-                                value = shortageTimes[display.item.id].orEmpty(),
-                                onValueChange = {
-                                    shortageTimes = shortageTimes + (display.item.id to it)
-                                    error = null
-                                },
-                                label = { Text(stringResource(R.string.label_ran_out_time)) },
-                                placeholder = { Text(stringResource(R.string.hint_ran_out_time)) },
-                                enabled = !saving,
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
                         }
                     }
                 }
                 error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
-                if (saveFailed) {
-                    item {
-                        Text(
-                            "Não foi possível salvar. Os dados digitados foram mantidos para tentar novamente.",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
             }
         },
         dismissButton = {
@@ -666,26 +610,17 @@ private fun HistoryEditDialog(
                                 quantidadeProduzida = parsedProduced,
                                 quantidadeSobra = parsedLeftover,
                                 acabouAntesDoFim = shortages[display.item.id] == true,
-                                horarioAcabou = shortageTimes[display.item.id]
-                                    ?.trim()
+                                horarioAcabou = display.item.horarioAcabou
                                     ?.takeIf { shortages[display.item.id] == true }
                             )
                         } else null
                     }
                     error = when {
-                        parsedCustomers == null -> "Informe uma quantidade válida de clientes."
+                        parsedCustomers == null || parsedCustomers <= 0 -> "Informe uma quantidade válida de clientes."
                         parsedItems.size != summary.items.size -> "Confira as quantidades informadas."
-                        else -> runCatching {
-                            validator.validarClientesAtendidos(parsedCustomers)
-                            parsedItems.forEach { item ->
-                                validator.validarFechamentoDoItem(
-                                    item.quantidadeProduzida,
-                                    item.quantidadeSobra,
-                                    item.acabouAntesDoFim,
-                                    item.horarioAcabou
-                                )
-                            }
-                        }.exceptionOrNull()?.message
+                        parsedItems.any { it.quantidadeProduzida <= 0.0 } -> "A quantidade produzida deve ser maior que zero."
+                        parsedItems.any { it.quantidadeSobra > it.quantidadeProduzida } -> "A sobra não pode ser maior que a quantidade produzida."
+                        else -> null
                     }
                     if (error == null) onSave(parsedCustomers!!, parsedItems)
                 }

@@ -16,215 +16,191 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.disabled
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.project.semsobra.R
-import com.project.semsobra.ui.components.EmptyState
-import com.project.semsobra.ui.components.HeaderCard
 import com.project.semsobra.domain.model.ProductionSummary
 import com.project.semsobra.ui.SaveStatus
+import com.project.semsobra.ui.components.EmptyState
+import com.project.semsobra.ui.components.HeaderCard
+import com.project.semsobra.ui.components.StatusBadgeCard
 import com.project.semsobra.ui.model.FoodUiModel
 import com.project.semsobra.ui.model.atualizarRascunhoProducao
 import com.project.semsobra.ui.model.prepararItensProducao
 import com.project.semsobra.ui.model.validarQuantidadesProducao
 import com.project.semsobra.ui.util.formatDate
-import com.project.semsobra.ui.util.formatInput
+import com.project.semsobra.ui.util.formatQuantity
 import com.project.semsobra.ui.util.isDecimalInput
-import com.project.semsobra.ui.util.parseDoubleOrNull
 import java.time.LocalDate
 
 @Composable
 fun ProductionDayScreen(
     foods: List<FoodUiModel>,
     saveStatus: SaveStatus,
+    production: ProductionSummary? = null,
     onSave: (Map<Long, Double>) -> Unit,
+    onSaveResultConsumed: () -> Unit = {},
     onGoHome: () -> Unit,
     onGoToClosing: () -> Unit,
-    modifier: Modifier = Modifier,
-    production: ProductionSummary? = null,
-    onSaveResultConsumed: () -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
-    val date = production?.day?.data?.let(LocalDate::parse) ?: LocalDate.now()
-    val savedQuantities = remember(production) {
-        production?.items.orEmpty().associate { it.food.id to formatInput(it.item.quantidadeProduzida) }
+    val today = remember { LocalDate.now() }
+    val todayName = stringArrayResource(R.array.weekdays)[today.dayOfWeek.value - 1]
+    val items = remember(foods, production) { prepararItensProducao(foods, production, today) }
+    val isClosed = production?.fechado == true
+    val savedQuantities = remember(items) {
+        items.mapNotNull { item ->
+            item.quantidadeSalva?.let { item.food.id to formatQuantity(it) }
+        }.toMap()
     }
-    val productionItems = remember(foods, production, date) {
-        prepararItensProducao(foods, production, date)
-    }
-    var quantities by rememberSaveable(date.toString()) { mutableStateOf(savedQuantities) }
-    var previousSaved by rememberSaveable(date.toString()) { mutableStateOf(savedQuantities) }
-    var updatingSubmission by rememberSaveable(date.toString()) { mutableStateOf(false) }
+    var draftQuantities by rememberSaveable { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    var previousSavedQuantities by remember { mutableStateOf(savedQuantities) }
     val errors = remember { mutableStateMapOf<Long, String>() }
-    val closed = production?.fechado == true
-    val dayName = stringArrayResource(R.array.weekdays)[date.dayOfWeek.value - 1]
     val invalidNumberMessage = stringResource(R.string.error_invalid_number)
 
-    LaunchedEffect(savedQuantities, closed, saveStatus) {
-        quantities = if (closed || saveStatus == SaveStatus.SUCCESS) savedQuantities
-        else atualizarRascunhoProducao(quantities, previousSaved, savedQuantities)
-        previousSaved = savedQuantities
-        if (saveStatus == SaveStatus.SUCCESS && (updatingSubmission || closed)) onSaveResultConsumed()
+    LaunchedEffect(savedQuantities) {
+        draftQuantities = atualizarRascunhoProducao(draftQuantities, previousSavedQuantities, savedQuantities)
+        previousSavedQuantities = savedQuantities
     }
 
-    if (saveStatus == SaveStatus.SUCCESS && !updatingSubmission && !closed) {
+    if (saveStatus == SaveStatus.SUCCESS) {
         AlertDialog(
             onDismissRequest = {},
             title = { Text(stringResource(R.string.production_saved_title)) },
             text = { Text(stringResource(R.string.production_saved_message)) },
             dismissButton = {
-                TextButton(onClick = onGoHome) { Text(stringResource(R.string.action_go_home)) }
+                TextButton(onClick = {
+                    onSaveResultConsumed()
+                    onGoHome()
+                }) { Text(stringResource(R.string.action_go_home)) }
             },
             confirmButton = {
-                Button(onClick = onGoToClosing) { Text(stringResource(R.string.action_go_closing)) }
+                Button(onClick = {
+                    onSaveResultConsumed()
+                    onGoToClosing()
+                }) { Text(stringResource(R.string.action_go_closing)) }
             }
         )
     }
 
-    val showSaveAction = !closed && productionItems.any { it.podeEditar } &&
-        saveStatus != SaveStatus.SUCCESS
-    val canSave = showSaveAction && saveStatus != SaveStatus.SAVING &&
-        (production != null || productionItems.any { quantities[it.food.id].orEmpty().isNotBlank() })
-    val onSaveAction: () -> Unit = {
-        if (canSave) {
-            val result = validarQuantidadesProducao(productionItems, quantities, invalidNumberMessage)
-            errors.clear()
-            errors.putAll(result.errors)
-            if (result.errors.isEmpty()) {
-                updatingSubmission = production != null
-                onSave(result.quantities)
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            HeaderCard(
+                title = stringResource(R.string.production_today_title),
+                value = formatDate(today.toString()),
+                subtitle = stringResource(R.string.production_today_description, todayName)
+            )
+        }
+
+        if (isClosed) {
+            item {
+                StatusBadgeCard(
+                    title = stringResource(R.string.production_closed_title),
+                    message = stringResource(R.string.production_closed_description),
+                    icon = Icons.Filled.Lock,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else if (production != null) {
+            item {
+                StatusBadgeCard(
+                    title = stringResource(R.string.production_open_title),
+                    message = stringResource(R.string.production_open_description),
+                    icon = Icons.Filled.CheckCircle,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
         }
-    }
 
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        floatingActionButtonPosition = FabPosition.End,
-        floatingActionButton = {
-            if (showSaveAction) {
-                ExtendedFloatingActionButton(
-                    onClick = onSaveAction,
-                    modifier = Modifier.semantics { if (!canSave) disabled() },
-                    icon = {
+        if (items.isEmpty()) {
+            item { EmptyState(stringResource(R.string.production_empty_menu, todayName)) }
+        } else {
+            items(items, key = { it.food.id }) { itemDisplay ->
+                val food = itemDisplay.food
+                val displayValue = draftQuantities[food.id] ?: savedQuantities[food.id].orEmpty()
+                ProductionInputCard(
+                    food = food,
+                    value = displayValue,
+                    error = errors[food.id],
+                    enabled = itemDisplay.podeEditar && saveStatus != SaveStatus.SAVING,
+                    onValueChange = { newValue ->
+                        draftQuantities = draftQuantities + (food.id to newValue)
+                        errors.remove(food.id)
+                    }
+                )
+            }
+
+            item {
+                if (isClosed) {
+                    Button(
+                        onClick = onGoToClosing,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.action_view_closing))
+                    }
+                } else {
+                    val activeDraft = items.filter { it.podeEditar }.associate { item ->
+                        item.food.id to (draftQuantities[item.food.id] ?: savedQuantities[item.food.id].orEmpty())
+                    }
+                    Button(
+                        onClick = {
+                            val result = validarQuantidadesProducao(items, activeDraft, invalidNumberMessage)
+                            errors.clear()
+                            errors.putAll(result.errors)
+                            if (result.errors.isEmpty() && result.quantities.isNotEmpty()) {
+                                onSave(result.quantities)
+                            }
+                        },
+                        enabled = activeDraft.values.any(String::isNotBlank) && saveStatus != SaveStatus.SAVING,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         if (saveStatus == SaveStatus.SAVING) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(18.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 strokeWidth = 2.dp
                             )
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.status_saving))
                         } else {
-                            Icon(Icons.Filled.Save, contentDescription = null)
+                            Text(
+                                if (production == null) stringResource(R.string.action_save_production)
+                                else stringResource(R.string.action_update_production)
+                            )
                         }
-                    },
-                    text = {
-                        Text(
-                            stringResource(when {
-                                saveStatus == SaveStatus.SAVING -> R.string.status_saving
-                                production != null -> R.string.action_update_production
-                                else -> R.string.action_save_production
-                            }),
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    containerColor = if (canSave || saveStatus == SaveStatus.SAVING) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                    },
-                    contentColor = if (canSave || saveStatus == SaveStatus.SAVING) {
-                        MaterialTheme.colorScheme.onPrimary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     }
-                )
-            }
-        }
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(
-                start = 18.dp,
-                end = 18.dp,
-                top = 16.dp,
-                bottom = if (showSaveAction) 96.dp else 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                HeaderCard(
-                    title = stringResource(when {
-                        closed -> R.string.production_closed_title
-                        production != null -> R.string.production_open_title
-                        else -> R.string.production_today_title
-                    }),
-                    value = formatDate(date.toString()),
-                    subtitle = when {
-                        closed -> stringResource(R.string.production_closed_description)
-                        production != null -> stringResource(R.string.production_open_description)
-                        else -> stringResource(R.string.production_today_description, dayName)
-                    }
-                )
-            }
-            if (saveStatus == SaveStatus.ERROR && !closed) {
-                item {
-                    Text(stringResource(R.string.production_save_failed), color = MaterialTheme.colorScheme.error)
-                }
-            }
-            if (productionItems.isEmpty()) {
-                item { EmptyState(stringResource(R.string.production_empty_menu, dayName)) }
-            } else {
-                items(productionItems, key = { it.food.id }) { item ->
-                    val food = item.food
-                    ProductionInputCard(
-                        food = food,
-                        value = if (item.podeEditar) quantities[food.id].orEmpty()
-                        else item.quantidadeSalva?.let(::formatInput).orEmpty(),
-                        error = if (item.podeEditar) errors[food.id] else null,
-                        enabled = item.podeEditar && saveStatus != SaveStatus.SAVING,
-                        inactive = !closed && !item.podeEditar,
-                        onValueChange = {
-                            quantities = quantities + (food.id to it)
-                            errors.remove(food.id)
-                        }
-                    )
-                }
-            }
-            if (closed) item {
-                Button(onClick = onGoToClosing, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.action_view_closing))
                 }
             }
         }
@@ -237,15 +213,8 @@ private fun ProductionInputCard(
     value: String,
     error: String?,
     enabled: Boolean,
-    inactive: Boolean,
     onValueChange: (String) -> Unit
 ) {
-    fun addQuantity(delta: Double) {
-        val current = parseDoubleOrNull(value) ?: 0.0
-        val next = (current + delta).coerceAtLeast(0.0)
-        onValueChange(formatInput(next))
-    }
-
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -273,39 +242,18 @@ private fun ProductionInputCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (inactive) {
-                Text(
-                    stringResource(R.string.production_inactive_item),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
             OutlinedTextField(
                 value = value,
                 enabled = enabled,
                 onValueChange = { if (isDecimalInput(it)) onValueChange(it) },
                 label = { Text(stringResource(R.string.label_quantity_produced, food.unidadeMedida)) },
                 placeholder = { Text(stringResource(R.string.hint_quantity)) },
-                textStyle = MaterialTheme.typography.titleLarge.copy(
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                ),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 isError = error != null,
                 supportingText = error?.let { message -> { Text(message) } },
                 modifier = Modifier.fillMaxWidth()
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0.5 to "+0,5", 1.0 to "+1,0", 5.0 to "+5,0").forEach { (amount, label) ->
-                    FilterChip(
-                        selected = false,
-                        enabled = enabled,
-                        onClick = { addQuantity(amount) },
-                        label = { Text(label, fontWeight = FontWeight.Bold) }
-                    )
-                }
-            }
         }
     }
 }

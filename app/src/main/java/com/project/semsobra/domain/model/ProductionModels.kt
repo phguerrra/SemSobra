@@ -10,9 +10,9 @@ data class ProducaoDia(
     val turno: Turno = Turno.ALMOCO,
     val restauranteAberto: Boolean = true,
     val alteradoEm: String? = null,
-    val endereco: String? = "Restaurante Principal - Centro, São Paulo",
-    val latitude: Double? = -23.5505,
-    val longitude: Double? = -46.6333
+    val endereco: String? = "Restaurante Principal - Santiago, RS",
+    val latitude: Double? = -29.1917,
+    val longitude: Double? = -54.8672
 )
 
 data class ItemProducao(

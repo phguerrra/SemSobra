@@ -20,9 +20,12 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,6 +34,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -546,6 +553,132 @@ fun ProductionSummaryCard(
             if (onEdit != null && summary.fechado) {
                 TextButton(onClick = onEdit) { Text("Reabrir para corrigir") }
             }
+        }
+    }
+}
+
+@Composable
+fun StatusBadgeCard(
+    title: String,
+    message: String,
+    icon: ImageVector,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(24.dp)
+            )
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun CitySelectorCard(
+    cidadeAtual: com.project.semsobra.domain.model.Cidade,
+    climaPrevisto: com.project.semsobra.domain.previsao.model.CondicaoClima,
+    onCidadeSelecionada: (com.project.semsobra.domain.model.Cidade) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(20.dp),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.LocationOn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = cidadeAtual.nomeFormatado,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Box {
+                    TextButton(onClick = { expanded = true }) {
+                        Text("Alterar cidade")
+                    }
+
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        com.project.semsobra.domain.model.Cidade.CIDADES_PADRAO.forEach { cidade ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        cidade.nomeFormatado,
+                                        fontWeight = if (cidade == cidadeAtual) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onCidadeSelecionada(cidade)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            val climaTexto = when (climaPrevisto) {
+                com.project.semsobra.domain.previsao.model.CondicaoClima.ENSOLARADO -> "☀️ Ensolarado (Sem impacto de chuva)"
+                com.project.semsobra.domain.previsao.model.CondicaoClima.NUBLADO -> "⛅ Nublado (Acompanhe o tempo)"
+                com.project.semsobra.domain.previsao.model.CondicaoClima.CHUVOSO -> "🌧️ Previsão de Chuva (-15% de movimento estimado)"
+                com.project.semsobra.domain.previsao.model.CondicaoClima.TEMPESTADE -> "⛈️ Previsão de Tempestade (-30% de movimento estimado)"
+            }
+
+            Text(
+                text = "Clima em ${cidadeAtual.nome}: $climaTexto",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
